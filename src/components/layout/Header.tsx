@@ -5,12 +5,11 @@ import { Button } from '@/components/ui/button';
 import { storeInfo } from '@/data/storeInfo';
 import { cn } from '@/lib/utils';
 
+// Public navigation only - no Invoice or Admin
 const navLinks = [
   { href: '/', label: 'Home' },
   { href: '/floor-samples', label: 'Floor Samples' },
   { href: '/online-inventory', label: 'Online Inventory' },
-  { href: '/invoice', label: 'Invoice' },
-  { href: '/admin', label: 'Admin' },
 ];
 
 export function Header() {

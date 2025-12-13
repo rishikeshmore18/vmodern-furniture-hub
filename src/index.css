@@ -125,16 +125,17 @@
   }
 }
 
-/* Print styles for invoice */
+/* Print styles for invoice - optimized for single page */
 @media print {
   @page {
-    size: A4 portrait;
-    margin: 1in;
+    size: letter portrait;
+    margin: 0.5in;
   }
 
-  body {
+  html, body {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+    font-size: 10px !important;
   }
 
   .no-print {
@@ -145,12 +146,51 @@
     display: block !important;
   }
 
+  /* Hide admin sidebar when printing */
+  aside {
+    display: none !important;
+  }
+
+  main {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
   .invoice-container {
     width: 100% !important;
     max-width: none !important;
     padding: 0 !important;
     margin: 0 !important;
     box-shadow: none !important;
+    page-break-inside: avoid;
+  }
+
+  /* Prevent page breaks inside important sections */
+  .invoice-container > div {
+    page-break-inside: avoid;
+  }
+
+  /* Compact table for print */
+  table {
+    font-size: 9px !important;
+  }
+
+  th, td {
+    padding: 2px 4px !important;
+  }
+
+  input, textarea, select {
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    min-height: auto !important;
+    height: auto !important;
+  }
+
+  /* Make sure all content fits */
+  * {
+    page-break-inside: avoid;
   }
 }
 
