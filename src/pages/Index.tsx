@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { storeInfo } from '@/data/storeInfo';
 import { getFeaturedProducts, getTaggedProducts } from '@/data/mockProducts';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Carousel, CarouselContent, CarouselItem } from '@/components/ui/carousel';
+import Autoplay from 'embla-carousel-autoplay';
 
 const Index = () => {
   const featuredProducts = getFeaturedProducts();
@@ -16,13 +18,54 @@ const Index = () => {
   return (
     <Layout>
       {/* Hero Section */}
-      <section className="relative overflow-hidden bg-secondary/30">
-        <div className="container py-16 md:py-24">
+      <section className="relative min-h-[600px] overflow-hidden md:min-h-[700px]">
+        {/* Background Carousel */}
+        <div className="absolute inset-0 z-0 h-full">
+          <Carousel
+            opts={{
+              align: "start",
+              loop: true,
+            }}
+            plugins={[
+              Autoplay({
+                delay: 5000,
+              }),
+            ]}
+            className="h-full w-full"
+          >
+            <CarouselContent className="h-full -ml-0">
+              <CarouselItem className="h-full pl-0 basis-full">
+                <div className="h-full w-full">
+                  <img
+                    src="/hero-carousel-1.png"
+                    alt="Vmodern Furniture Store Interior"
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              </CarouselItem>
+              <CarouselItem className="h-full pl-0">
+                <div className="h-full w-full">
+                  <img
+                    src="/hero-carousel-2.png"
+                    alt="Vmodern Furniture Store Exterior"
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              </CarouselItem>
+            </CarouselContent>
+          </Carousel>
+        </div>
+
+        {/* Overlay for better text readability */}
+        <div className="absolute inset-0 z-10 bg-black/40" />
+
+        {/* Content */}
+        <div className="relative z-20 container py-16 md:py-24">
           <div className="mx-auto max-w-3xl text-center">
-            <h1 className="animate-fade-in text-4xl font-semibold tracking-tight text-foreground md:text-5xl lg:text-6xl">
+            <h1 className="animate-fade-in text-4xl font-semibold tracking-tight text-white drop-shadow-lg md:text-5xl lg:text-6xl">
               {storeInfo.name}
             </h1>
-            <p className="animate-fade-in animation-delay-100 mt-6 text-lg text-muted-foreground opacity-0">
+            <p className="animate-fade-in animation-delay-100 mt-6 text-lg text-white/90 drop-shadow-md opacity-0">
               Modern furniture, floor samples ready to take home today or order from our full catalog.
             </p>
             <div className="animate-fade-in animation-delay-200 mt-10 flex flex-col gap-4 opacity-0 sm:flex-row sm:justify-center">
@@ -32,7 +75,7 @@ const Index = () => {
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
-              <Button asChild variant="outline" size="lg">
+              <Button asChild variant="outline" size="lg" className="bg-white/90 hover:bg-white">
                 <Link to="/online-inventory">View Online Inventory</Link>
               </Button>
             </div>
@@ -40,21 +83,21 @@ const Index = () => {
 
           {/* Quick info cards */}
           <div className="animate-fade-in animation-delay-300 mx-auto mt-16 grid max-w-4xl gap-4 opacity-0 md:grid-cols-3">
-            <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-4">
+            <div className="flex items-center gap-3 rounded-lg border border-white/20 bg-white/90 backdrop-blur-sm p-4 shadow-lg">
               <MapPin className="h-5 w-5 shrink-0 text-accent" />
               <div className="text-sm">
                 <p className="font-medium text-foreground">Visit Us</p>
                 <p className="text-muted-foreground">{storeInfo.fullAddress}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-4">
+            <div className="flex items-center gap-3 rounded-lg border border-white/20 bg-white/90 backdrop-blur-sm p-4 shadow-lg">
               <Clock className="h-5 w-5 shrink-0 text-accent" />
               <div className="text-sm">
                 <p className="font-medium text-foreground">Store Hours</p>
                 <p className="text-muted-foreground">{storeInfo.hoursShort.open}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-4">
+            <div className="flex items-center gap-3 rounded-lg border border-white/20 bg-white/90 backdrop-blur-sm p-4 shadow-lg">
               <Phone className="h-5 w-5 shrink-0 text-accent" />
               <div className="text-sm">
                 <p className="font-medium text-foreground">Call Us</p>
