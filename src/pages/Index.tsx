@@ -18,37 +18,41 @@ const Index = () => {
   return (
     <Layout>
       {/* Hero Section */}
-      <section className="relative min-h-[600px] overflow-hidden md:min-h-[700px]">
+      <section className="relative min-h-[600px] overflow-hidden md:min-h-[700px] lg:min-h-[800px]">
         {/* Background Carousel */}
-        <div className="absolute inset-0 z-0 h-full">
+        <div className="absolute inset-0 z-0 h-full w-full hero-carousel-container">
           <Carousel
             opts={{
               align: "start",
               loop: true,
+              dragFree: false,
             }}
             plugins={[
               Autoplay({
                 delay: 5000,
+                stopOnInteraction: false,
               }),
             ]}
             className="h-full w-full"
           >
-            <CarouselContent className="h-full -ml-0">
+            <CarouselContent className="h-full -ml-0 md:-ml-0">
               <CarouselItem className="h-full pl-0 basis-full">
-                <div className="h-full w-full">
+                <div className="relative h-full w-full overflow-hidden">
                   <img
                     src="/hero-carousel-1.png"
                     alt="Vmodern Furniture Store Interior"
-                    className="h-full w-full object-cover"
+                    className="hero-carousel-image"
+                    loading="eager"
                   />
                 </div>
               </CarouselItem>
-              <CarouselItem className="h-full pl-0">
-                <div className="h-full w-full">
+              <CarouselItem className="h-full pl-0 basis-full">
+                <div className="relative h-full w-full overflow-hidden">
                   <img
                     src="/hero-carousel-2.png"
                     alt="Vmodern Furniture Store Exterior"
-                    className="h-full w-full object-cover"
+                    className="hero-carousel-image"
+                    loading="eager"
                   />
                 </div>
               </CarouselItem>
