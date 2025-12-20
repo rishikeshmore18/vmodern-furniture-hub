@@ -255,30 +255,3 @@
 .animation-delay-400 {
   animation-delay: 400ms;
 }
-
-/* Hero Carousel Image Sizing - ensures images always fit perfectly */
-.hero-carousel-image {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
-  /* Ensure image always fills container */
-  min-width: 100%;
-  min-height: 100%;
-  /* Prevent image from being too small */
-  max-width: none;
-  max-height: none;
-}
-
-/* Ensure carousel container and viewport fill properly */
-.hero-carousel-container [data-embla-viewport] {
-  height: 100% !important;
-  overflow: hidden !important;
-}
-
-.hero-carousel-container [data-embla-container] {
-  height: 100% !important;
-  display: flex !important;
-}

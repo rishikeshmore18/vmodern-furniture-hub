@@ -20,38 +20,36 @@ const Index = () => {
       {/* Hero Section */}
       <section className="relative min-h-[600px] overflow-hidden md:min-h-[700px] lg:min-h-[800px]">
         {/* Background Carousel */}
-        <div className="absolute inset-0 z-0 h-full w-full hero-carousel-container">
+        <div className="absolute inset-0 z-0 h-full w-full">
           <Carousel
             opts={{
               align: "start",
               loop: true,
-              dragFree: false,
             }}
             plugins={[
               Autoplay({
                 delay: 5000,
-                stopOnInteraction: false,
               }),
             ]}
             className="h-full w-full"
           >
-            <CarouselContent className="h-full -ml-0 md:-ml-0">
+            <CarouselContent className="h-full -ml-0">
               <CarouselItem className="h-full pl-0 basis-full">
-                <div className="relative h-full w-full overflow-hidden">
+                <div className="h-full w-full">
                   <img
                     src="/hero-carousel-1.png"
                     alt="Vmodern Furniture Store Interior"
-                    className="hero-carousel-image"
+                    className="h-full w-full object-cover object-center"
                     loading="eager"
                   />
                 </div>
               </CarouselItem>
               <CarouselItem className="h-full pl-0 basis-full">
-                <div className="relative h-full w-full overflow-hidden">
+                <div className="h-full w-full">
                   <img
                     src="/hero-carousel-2.png"
                     alt="Vmodern Furniture Store Exterior"
-                    className="hero-carousel-image"
+                    className="h-full w-full object-cover object-center"
                     loading="eager"
                   />
                 </div>
