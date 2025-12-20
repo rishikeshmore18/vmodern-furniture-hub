@@ -44,7 +44,7 @@ export function Header() {
           <img
             src="/logo.png"
             alt={storeInfo.name}
-            className="h-8 w-auto object-contain"
+            className="h-16 w-auto object-contain"
           />
         </Link>
 
