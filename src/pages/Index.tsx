@@ -17,10 +17,10 @@ const Index = () => {
 
   return (
     <Layout>
-      {/* Hero Section */}
-      <section className="relative min-h-[600px] overflow-hidden md:min-h-[700px] lg:min-h-[800px]">
+      {/* Hero Section - Fixed heights per device to prevent gray bars */}
+      <section className="relative h-[70vh] overflow-hidden sm:h-[75vh] md:h-[80vh] lg:h-[85vh] xl:h-[90vh]">
         {/* Background Carousel */}
-        <div className="absolute inset-0 z-0 h-full w-full">
+        <div className="absolute inset-0 z-0 h-full w-full hero-section-carousel">
           <Carousel
             opts={{
               align: "start",
@@ -35,7 +35,7 @@ const Index = () => {
           >
             <CarouselContent className="h-full -ml-0">
               <CarouselItem className="h-full pl-0 basis-full">
-                <div className="h-full w-full">
+                <div className="h-full w-full overflow-hidden">
                   <img
                     src="/hero-carousel-1.png"
                     alt="Vmodern Furniture Store Interior"
@@ -45,7 +45,7 @@ const Index = () => {
                 </div>
               </CarouselItem>
               <CarouselItem className="h-full pl-0 basis-full">
-                <div className="h-full w-full">
+                <div className="h-full w-full overflow-hidden">
                   <img
                     src="/hero-carousel-2.png"
                     alt="Vmodern Furniture Store Exterior"
@@ -62,7 +62,7 @@ const Index = () => {
         <div className="absolute inset-0 z-10 bg-black/40" />
 
         {/* Content */}
-        <div className="relative z-20 container py-16 md:py-24">
+        <div className="relative z-20 container flex h-full flex-col justify-center py-8 sm:py-12 md:py-16">
           <div className="mx-auto max-w-3xl text-center">
             <h1 className="animate-fade-in text-4xl font-semibold tracking-tight text-white drop-shadow-lg md:text-5xl lg:text-6xl">
               {storeInfo.name}
