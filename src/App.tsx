@@ -13,8 +13,12 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-// Get the base path for GitHub Pages
-const basename = import.meta.env.PROD ? '/vmodern-furniture-hub' : '';
+// Use Vite's configured base URL so routing works on both GitHub Pages and custom domains
+const basename = (() => {
+  const base = import.meta.env.BASE_URL || "/";
+  const trimmed = base.endsWith("/") ? base.slice(0, -1) : base;
+  return trimmed === "/" ? "" : trimmed;
+})();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
