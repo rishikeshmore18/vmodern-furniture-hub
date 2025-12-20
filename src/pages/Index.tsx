@@ -6,8 +6,6 @@ import { Button } from '@/components/ui/button';
 import { storeInfo } from '@/data/storeInfo';
 import { getFeaturedProducts, getTaggedProducts } from '@/data/mockProducts';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Carousel, CarouselContent, CarouselItem } from '@/components/ui/carousel';
-import Autoplay from 'embla-carousel-autoplay';
 
 const Index = () => {
   const featuredProducts = getFeaturedProducts();
@@ -18,42 +16,15 @@ const Index = () => {
   return (
     <Layout>
       {/* Hero Section - Dynamic sizing that adapts to content and viewport */}
-      <section className="relative overflow-hidden min-h-[600px] sm:min-h-[650px] md:min-h-[700px] lg:min-h-[750px] bg-transparent">
-        {/* Background Carousel */}
-        <div className="absolute inset-0 z-0 h-full w-full hero-section-carousel">
-          <Carousel
-            opts={{
-              align: "start",
-              loop: true,
-            }}
-            plugins={[
-              Autoplay({
-                delay: 5000,
-              }),
-            ]}
-            className="h-full w-full"
-          >
-            <CarouselContent className="h-full -ml-0">
-              <CarouselItem className="h-full pl-0 basis-full">
-                <div className="hero-carousel-image-wrapper">
-                  <img
-                    src="/hero-carousel-1.png"
-                    alt="Vmodern Furniture Store Interior"
-                    loading="eager"
-                  />
-                </div>
-              </CarouselItem>
-              <CarouselItem className="h-full pl-0 basis-full">
-                <div className="hero-carousel-image-wrapper">
-                  <img
-                    src="/hero-carousel-2.png"
-                    alt="Vmodern Furniture Store Exterior"
-                    loading="eager"
-                  />
-                </div>
-              </CarouselItem>
-            </CarouselContent>
-          </Carousel>
+      <section className="relative overflow-hidden h-[600px] sm:h-[650px] md:h-[700px] lg:h-[750px]">
+        {/* Background Image */}
+        <div className="absolute inset-0 z-0">
+          <img
+            src="/hero-carousel-1.png"
+            alt="Vmodern Furniture Store"
+            className="w-full h-full object-cover"
+            loading="eager"
+          />
         </div>
 
         {/* Overlay for better text readability */}
@@ -74,9 +45,6 @@ const Index = () => {
                   View Floor Sample Furniture
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
-              </Button>
-              <Button asChild variant="outline" size="lg" className="bg-white/90 hover:bg-white">
-                <Link to="/online-inventory">View Online Inventory</Link>
               </Button>
             </div>
           </div>
@@ -142,11 +110,8 @@ const Index = () => {
               <p className="mt-3 text-muted-foreground">
                 Items you must order first. We then purchase and deliver them to you. Access our full catalog of modern furniture.
               </p>
-              <Button asChild className="mt-6" variant="outline">
-                <Link to="/online-inventory">
-                  Browse Online Inventory
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
+              <Button className="mt-6" variant="outline" disabled>
+                Coming Soon!
               </Button>
             </div>
           </div>
