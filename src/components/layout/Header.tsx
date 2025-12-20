@@ -41,9 +41,11 @@ export function Header() {
       {/* Main navigation */}
       <nav className="container flex h-16 items-center justify-between">
         <Link to="/" className="flex items-center gap-2">
-          <span className="text-xl font-semibold tracking-tight text-foreground">
-            {storeInfo.name}
-          </span>
+          <img
+            src="/logo.png"
+            alt={storeInfo.name}
+            className="h-8 w-auto object-contain"
+          />
         </Link>
 
         {/* Desktop navigation */}
