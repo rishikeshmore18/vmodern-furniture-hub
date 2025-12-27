@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Package, 
@@ -9,7 +10,8 @@ import {
   Store,
   Globe,
   LogOut,
-  Menu
+  Menu,
+  Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,7 +43,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { mockProducts, getFloorSamples, getOnlineInventory } from '@/data/mockProducts';
 import { Product, ProductCategory, SetItem, calculateFinalPrice } from '@/types/product';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -54,33 +55,22 @@ import {
   SheetContent,
   SheetTrigger,
 } from '@/components/ui/sheet';
+import { useAuth } from '@/hooks/useAuth';
+import { useProducts } from '@/hooks/useProducts';
 
 type AdminView = 'dashboard' | 'products' | 'invoices';
 
 const Admin = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [password, setPassword] = useState('');
-  const [products, setProducts] = useState<Product[]>(mockProducts);
+  const navigate = useNavigate();
+  const { user, isLoading: authLoading, signOut } = useAuth();
+  const { products, isLoading: productsLoading, addProduct, updateProduct, deleteProduct } = useProducts();
+  
   const [categoryFilter, setCategoryFilter] = useState<'all' | ProductCategory>('all');
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [activeView, setActiveView] = useState<AdminView>('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  // Simple auth check
-  const handleLogin = () => {
-    if (password === 'admin123') {
-      setIsLoggedIn(true);
-      toast({ title: 'Welcome to Admin Panel' });
-    } else {
-      toast({ title: 'Invalid password', variant: 'destructive' });
-    }
-  };
-
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setPassword('');
-  };
+  const [isSaving, setIsSaving] = useState(false);
 
   // Product form state
   const [formData, setFormData] = useState({
@@ -98,6 +88,18 @@ const Admin = () => {
     tagStaffPick: false,
     setItems: [] as SetItem[],
   });
+
+  // Redirect to auth if not logged in
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate('/auth');
+    }
+  }, [user, authLoading, navigate]);
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/auth');
+  };
 
   const resetForm = () => {
     setFormData({
@@ -120,7 +122,6 @@ const Admin = () => {
 
   const openEditDialog = (product: Product) => {
     setEditingProduct(product);
-    // If product has imageUrls, use them; otherwise use mainImageUrl as single image
     const imageUrls = product.imageUrls && product.imageUrls.length > 0 
       ? product.imageUrls 
       : (product.mainImageUrl ? [product.mainImageUrl] : []);
@@ -143,52 +144,54 @@ const Admin = () => {
     setIsDialogOpen(true);
   };
 
-  const handleSaveProduct = () => {
+  const handleSaveProduct = async () => {
     const tags: ('new' | 'sale' | 'staff_pick')[] = [];
     if (formData.isNew) tags.push('new');
     if (formData.tagSale) tags.push('sale');
     if (formData.tagStaffPick) tags.push('staff_pick');
 
-    // Use first image from imageUrls as mainImageUrl, or fallback to mainImageUrl field
     const imageUrls = formData.imageUrls.length > 0 ? formData.imageUrls : [];
     const mainImageUrl = imageUrls.length > 0 
       ? imageUrls[0] 
       : (formData.mainImageUrl || 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800&q=80');
 
-    const productData: Product = {
-      id: editingProduct?.id || Date.now().toString(),
+    const productData = {
       name: formData.name,
       category: formData.inventoryType,
-      productType: formData.productType,
-      subcategory: formData.subcategory,
+      productType: formData.productType || undefined,
+      subcategory: formData.subcategory || undefined,
       description: formData.description,
       priceOriginal: formData.priceOriginal,
       discountPercent: formData.discountPercent,
-      priceFinal: calculateFinalPrice(formData.priceOriginal, formData.discountPercent),
       isNew: formData.isNew,
       tags,
       mainImageUrl: mainImageUrl,
       imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
       setItems: formData.setItems.length > 0 ? formData.setItems : undefined,
-      createdAt: editingProduct?.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
     };
 
-    if (editingProduct) {
-      setProducts(products.map(p => p.id === editingProduct.id ? productData : p));
-      toast({ title: 'Product updated successfully' });
-    } else {
-      setProducts([...products, productData]);
-      toast({ title: 'Product added successfully' });
+    setIsSaving(true);
+    try {
+      if (editingProduct) {
+        await updateProduct(editingProduct.id, productData);
+      } else {
+        await addProduct(productData);
+      }
+      setIsDialogOpen(false);
+      resetForm();
+    } catch (err) {
+      // Error is already handled in hook with toast
+    } finally {
+      setIsSaving(false);
     }
-
-    setIsDialogOpen(false);
-    resetForm();
   };
 
-  const handleDeleteProduct = (id: string) => {
-    setProducts(products.filter(p => p.id !== id));
-    toast({ title: 'Product deleted' });
+  const handleDeleteProduct = async (id: string) => {
+    try {
+      await deleteProduct(id);
+    } catch (err) {
+      // Error is already handled in hook with toast
+    }
   };
 
   const filteredProducts = categoryFilter === 'all' 
@@ -198,41 +201,21 @@ const Admin = () => {
   const floorSampleCount = products.filter(p => p.category === 'floor_sample').length;
   const onlineCount = products.filter(p => p.category === 'online_inventory').length;
 
-  // Login screen
-  if (!isLoggedIn) {
+  // Loading state
+  if (authLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle>Admin Login</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Enter admin password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                />
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Hint: admin123
-                </p>
-              </div>
-              <Button onClick={handleLogin} className="w-full">
-                Login
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
-  // Sidebar navigation component (reusable for desktop and mobile)
+  // If not logged in, show nothing (redirect will happen)
+  if (!user) {
+    return null;
+  }
+
+  // Sidebar navigation component
   const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => (
     <>
       <div className="mb-8">
@@ -288,10 +271,13 @@ const Admin = () => {
         </button>
       </nav>
 
-      <Button variant="outline" onClick={handleLogout} className="mt-auto">
-        <LogOut className="mr-2 h-4 w-4" />
-        Logout
-      </Button>
+      <div className="mt-auto pt-4 border-t border-border">
+        <p className="text-xs text-muted-foreground mb-2 truncate">{user.email}</p>
+        <Button variant="outline" onClick={handleLogout} className="w-full">
+          <LogOut className="mr-2 h-4 w-4" />
+          Logout
+        </Button>
+      </div>
     </>
   );
 
@@ -308,10 +294,6 @@ const Admin = () => {
           <SidebarContent onNavigate={() => setIsMobileMenuOpen(false)} />
         </SheetContent>
       </Sheet>
-        <div className="mb-8">
-          <h1 className="text-xl font-semibold text-foreground">Admin Panel</h1>
-          <p className="text-sm text-muted-foreground">Vmodern Furniture</p>
-        </div>
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto">
@@ -332,6 +314,7 @@ const Admin = () => {
             <LogOut className="h-5 w-5" />
           </Button>
         </div>
+
         {activeView === 'dashboard' && (
           <div className="p-4 sm:p-6 md:p-8">
             <div className="mb-8">
@@ -349,7 +332,9 @@ const Admin = () => {
                   <Package className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{products.length}</div>
+                  <div className="text-2xl font-bold">
+                    {productsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : products.length}
+                  </div>
                 </CardContent>
               </Card>
               <Card>
@@ -360,7 +345,9 @@ const Admin = () => {
                   <Store className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{floorSampleCount}</div>
+                  <div className="text-2xl font-bold">
+                    {productsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : floorSampleCount}
+                  </div>
                 </CardContent>
               </Card>
               <Card>
@@ -371,7 +358,9 @@ const Admin = () => {
                   <Globe className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{onlineCount}</div>
+                  <div className="text-2xl font-bold">
+                    {productsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : onlineCount}
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -397,7 +386,6 @@ const Admin = () => {
 
         {activeView === 'products' && (
           <div className="p-4 sm:p-6 md:p-8">
-            {/* Product Management */}
             <Card>
               <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <CardTitle>Product Management</CardTitle>
@@ -432,7 +420,7 @@ const Admin = () => {
                         </DialogTitle>
                       </DialogHeader>
                       <div className="space-y-6 py-4">
-                        {/* Inventory Type - Radio buttons */}
+                        {/* Inventory Type */}
                         <div>
                           <Label className="text-base font-medium">Inventory Type</Label>
                           <RadioGroup
@@ -488,12 +476,10 @@ const Admin = () => {
                           label="Product Images"
                           value={formData.imageUrls}
                           onChange={(urls) => {
-                            // Limit to 10 images
                             const limitedUrls = urls.slice(0, 10);
                             setFormData({ 
                               ...formData, 
                               imageUrls: limitedUrls,
-                              // Keep mainImageUrl in sync with first image for backward compatibility
                               mainImageUrl: limitedUrls.length > 0 ? limitedUrls[0] : formData.mainImageUrl
                             });
                           }}
@@ -580,10 +566,11 @@ const Admin = () => {
                           </div>
                         </div>
                         <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-4">
-                          <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                          <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isSaving}>
                             Cancel
                           </Button>
-                          <Button onClick={handleSaveProduct}>
+                          <Button onClick={handleSaveProduct} disabled={isSaving}>
+                            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             {editingProduct ? 'Update' : 'Add'} Product
                           </Button>
                         </div>
@@ -593,136 +580,155 @@ const Admin = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                {/* Mobile Card View */}
-                <div className="md:hidden space-y-4">
-                  {filteredProducts.map((product) => (
-                    <Card key={product.id}>
-                      <CardContent className="p-4">
-                        <div className="flex gap-4">
-                          <img
-                            src={product.mainImageUrl}
-                            alt={product.name}
-                            className="h-20 w-20 rounded object-cover flex-shrink-0"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-medium text-foreground truncate">{product.name}</h3>
-                            <div className="mt-2 space-y-1">
-                              <div className="flex items-center gap-2">
-                                  <Badge variant={product.category === 'floor_sample' ? 'default' : 'secondary'} className="text-xs">
-                                    {product.category === 'floor_sample' ? 'Floor Sample' : 'Online'}
-                                  </Badge>
-                              </div>
-                              <p className="text-xs text-muted-foreground">
-                                {product.productType || '-'}
-                              </p>
-                              <div className="flex items-baseline gap-2">
-                                <span className="text-sm font-semibold text-foreground">
-                                  ${product.priceFinal.toFixed(2)}
-                                </span>
-                                {product.priceOriginal !== product.priceFinal && (
-                                  <span className="text-xs text-muted-foreground line-through">
-                                    ${product.priceOriginal.toFixed(2)}
-                                  </span>
-                                )}
-                                {product.discountPercent > 0 && (
-                                  <Badge variant="highlight" className="text-xs">
-                                    {product.discountPercent}% OFF
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                            <div className="mt-3 flex gap-2">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => openEditDialog(product)}
-                                className="flex-1"
-                              >
-                                <Edit className="h-4 w-4 mr-2" />
-                                Edit
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDeleteProduct(product.id)}
-                                className="text-destructive hover:text-destructive"
-                              >
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Delete
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-                {/* Desktop Table View */}
-                <div className="hidden md:block overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[80px]">Image</TableHead>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Inventory</TableHead>
-                        <TableHead>Category</TableHead>
-                        <TableHead className="text-right">Original</TableHead>
-                        <TableHead className="text-right">Discount</TableHead>
-                        <TableHead className="text-right">Final Price</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
+                {productsLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <>
+                    {/* Mobile Card View */}
+                    <div className="md:hidden space-y-4">
                       {filteredProducts.map((product) => (
-                        <TableRow key={product.id}>
-                          <TableCell>
-                            <img
-                              src={product.mainImageUrl}
-                              alt={product.name}
-                              className="h-12 w-12 rounded object-cover"
-                            />
-                          </TableCell>
-                          <TableCell className="font-medium">{product.name}</TableCell>
-                          <TableCell>
-                            <Badge variant={product.category === 'floor_sample' ? 'default' : 'secondary'}>
-                              {product.category === 'floor_sample' ? 'Floor Sample' : 'Online'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {product.productType || '-'}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            ${product.priceOriginal.toFixed(2)}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {product.discountPercent > 0 ? `${product.discountPercent}%` : '-'}
-                          </TableCell>
-                          <TableCell className="text-right font-medium">
-                            ${product.priceFinal.toFixed(2)}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => openEditDialog(product)}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDeleteProduct(product.id)}
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
+                        <Card key={product.id}>
+                          <CardContent className="p-4">
+                            <div className="flex gap-4">
+                              <img
+                                src={product.mainImageUrl}
+                                alt={product.name}
+                                className="h-20 w-20 rounded object-cover flex-shrink-0"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-medium text-foreground truncate">{product.name}</h3>
+                                <div className="mt-2 space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant={product.category === 'floor_sample' ? 'default' : 'secondary'} className="text-xs">
+                                      {product.category === 'floor_sample' ? 'Floor Sample' : 'Online'}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">
+                                    {product.productType || '-'}
+                                  </p>
+                                  <div className="flex items-baseline gap-2">
+                                    <span className="text-sm font-semibold text-foreground">
+                                      ${product.priceFinal.toFixed(2)}
+                                    </span>
+                                    {product.priceOriginal !== product.priceFinal && (
+                                      <span className="text-xs text-muted-foreground line-through">
+                                        ${product.priceOriginal.toFixed(2)}
+                                      </span>
+                                    )}
+                                    {product.discountPercent > 0 && (
+                                      <Badge variant="highlight" className="text-xs">
+                                        {product.discountPercent}% OFF
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="mt-3 flex gap-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => openEditDialog(product)}
+                                    className="flex-1"
+                                  >
+                                    <Edit className="h-4 w-4 mr-2" />
+                                    Edit
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleDeleteProduct(product.id)}
+                                    className="text-destructive hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Delete
+                                  </Button>
+                                </div>
+                              </div>
                             </div>
-                          </TableCell>
-                        </TableRow>
+                          </CardContent>
+                        </Card>
                       ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                      {filteredProducts.length === 0 && (
+                        <p className="text-center text-muted-foreground py-8">No products found. Add your first product!</p>
+                      )}
+                    </div>
+
+                    {/* Desktop Table View */}
+                    <div className="hidden md:block overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-[80px]">Image</TableHead>
+                            <TableHead>Name</TableHead>
+                            <TableHead>Inventory</TableHead>
+                            <TableHead>Category</TableHead>
+                            <TableHead className="text-right">Original</TableHead>
+                            <TableHead className="text-right">Discount</TableHead>
+                            <TableHead className="text-right">Final Price</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredProducts.map((product) => (
+                            <TableRow key={product.id}>
+                              <TableCell>
+                                <img
+                                  src={product.mainImageUrl}
+                                  alt={product.name}
+                                  className="h-12 w-12 rounded object-cover"
+                                />
+                              </TableCell>
+                              <TableCell className="font-medium">{product.name}</TableCell>
+                              <TableCell>
+                                <Badge variant={product.category === 'floor_sample' ? 'default' : 'secondary'}>
+                                  {product.category === 'floor_sample' ? 'Floor Sample' : 'Online'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {product.productType || '-'}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                ${product.priceOriginal.toFixed(2)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {product.discountPercent > 0 ? `${product.discountPercent}%` : '-'}
+                              </TableCell>
+                              <TableCell className="text-right font-medium">
+                                ${product.priceFinal.toFixed(2)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => openEditDialog(product)}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleDeleteProduct(product.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {filteredProducts.length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                                No products found. Add your first product!
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>
