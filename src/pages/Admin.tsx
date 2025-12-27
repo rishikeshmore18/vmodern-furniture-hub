@@ -45,7 +45,7 @@ import { mockProducts, getFloorSamples, getOnlineInventory } from '@/data/mockPr
 import { Product, ProductCategory, SetItem, calculateFinalPrice } from '@/types/product';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { ImageUpload } from '@/components/admin/ImageUpload';
+import { MultipleImageUpload } from '@/components/admin/MultipleImageUpload';
 import { SetItemsEditor } from '@/components/admin/SetItemsEditor';
 import { CategorySelector } from '@/components/admin/CategorySelector';
 import InvoicePage from '@/components/admin/InvoicePage';
@@ -92,6 +92,7 @@ const Admin = () => {
     priceOriginal: 0,
     discountPercent: 0,
     mainImageUrl: '',
+    imageUrls: [] as string[],
     isNew: false,
     tagSale: false,
     tagStaffPick: false,
@@ -108,6 +109,7 @@ const Admin = () => {
       priceOriginal: 0,
       discountPercent: 0,
       mainImageUrl: '',
+      imageUrls: [],
       isNew: false,
       tagSale: false,
       tagStaffPick: false,
@@ -118,6 +120,11 @@ const Admin = () => {
 
   const openEditDialog = (product: Product) => {
     setEditingProduct(product);
+    // If product has imageUrls, use them; otherwise use mainImageUrl as single image
+    const imageUrls = product.imageUrls && product.imageUrls.length > 0 
+      ? product.imageUrls 
+      : (product.mainImageUrl ? [product.mainImageUrl] : []);
+    
     setFormData({
       name: product.name,
       inventoryType: product.category,
@@ -127,6 +134,7 @@ const Admin = () => {
       priceOriginal: product.priceOriginal,
       discountPercent: product.discountPercent,
       mainImageUrl: product.mainImageUrl,
+      imageUrls: imageUrls,
       isNew: product.isNew,
       tagSale: product.tags.includes('sale'),
       tagStaffPick: product.tags.includes('staff_pick'),
@@ -141,6 +149,12 @@ const Admin = () => {
     if (formData.tagSale) tags.push('sale');
     if (formData.tagStaffPick) tags.push('staff_pick');
 
+    // Use first image from imageUrls as mainImageUrl, or fallback to mainImageUrl field
+    const imageUrls = formData.imageUrls.length > 0 ? formData.imageUrls : [];
+    const mainImageUrl = imageUrls.length > 0 
+      ? imageUrls[0] 
+      : (formData.mainImageUrl || 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800&q=80');
+
     const productData: Product = {
       id: editingProduct?.id || Date.now().toString(),
       name: formData.name,
@@ -153,7 +167,8 @@ const Admin = () => {
       priceFinal: calculateFinalPrice(formData.priceOriginal, formData.discountPercent),
       isNew: formData.isNew,
       tags,
-      mainImageUrl: formData.mainImageUrl || 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800&q=80',
+      mainImageUrl: mainImageUrl,
+      imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
       setItems: formData.setItems.length > 0 ? formData.setItems : undefined,
       createdAt: editingProduct?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -468,11 +483,20 @@ const Admin = () => {
                           />
                         </div>
 
-                        {/* Image Upload */}
-                        <ImageUpload
-                          label="Main Product Image"
-                          value={formData.mainImageUrl}
-                          onChange={(url) => setFormData({ ...formData, mainImageUrl: url })}
+                        {/* Multiple Image Upload */}
+                        <MultipleImageUpload
+                          label="Product Images"
+                          value={formData.imageUrls}
+                          onChange={(urls) => {
+                            // Limit to 10 images
+                            const limitedUrls = urls.slice(0, 10);
+                            setFormData({ 
+                              ...formData, 
+                              imageUrls: limitedUrls,
+                              // Keep mainImageUrl in sync with first image for backward compatibility
+                              mainImageUrl: limitedUrls.length > 0 ? limitedUrls[0] : formData.mainImageUrl
+                            });
+                          }}
                         />
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

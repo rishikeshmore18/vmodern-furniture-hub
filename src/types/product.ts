@@ -26,6 +26,7 @@ export interface Product {
   isNew: boolean;
   tags: ProductTag[];
   mainImageUrl: string;
+  imageUrls?: string[]; // Multiple images support
   setItems?: SetItem[];
   createdAt: string;
   updatedAt: string;
