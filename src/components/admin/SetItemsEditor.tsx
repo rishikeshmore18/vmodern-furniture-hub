@@ -101,7 +101,7 @@ export function SetItemsEditor({ items, onChange }: SetItemsEditorProps) {
                 </div>
               </div>
               
-              <div className="mt-4">
+              <div className="mt-4 w-full">
                 <MultipleImageUpload
                   label="Item Photos (Optional)"
                   value={item.imageUrls || (item.imageUrl ? [item.imageUrl] : [])}

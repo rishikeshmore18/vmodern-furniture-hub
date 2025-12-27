@@ -79,12 +79,12 @@ export function MultipleImageUpload({ value, onChange, label = 'Product Images' 
   };
 
   return (
-    <div className="space-y-3">
+    <div className="w-full space-y-3">
       <Label>{label}</Label>
       
       {/* Image Grid */}
       {value.length > 0 ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+        <div className="w-full grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
           {value.map((url, index) => (
             <div key={index} className="relative group">
               <div className="relative aspect-square overflow-hidden rounded-lg border border-border bg-muted">
