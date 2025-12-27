@@ -83,25 +83,25 @@ const Index = () => {
 
           {/* Quick info cards */}
           <div className="animate-fade-in animation-delay-300 mx-auto mt-16 grid max-w-4xl gap-4 opacity-0 md:grid-cols-3">
-            <div className="flex items-center gap-3 rounded-lg border border-white/20 bg-white/90 backdrop-blur-sm p-4 shadow-lg">
-              <MapPin className="h-5 w-5 shrink-0 text-accent" />
+            <div className="flex items-center gap-3 rounded-lg border border-white/30 bg-white/95 backdrop-blur-md p-4 shadow-xl">
+              <MapPin className="h-5 w-5 shrink-0 text-gray-800" />
               <div className="text-sm">
-                <p className="font-medium text-foreground">Visit Us</p>
-                <p className="text-muted-foreground">{storeInfo.fullAddress}</p>
+                <p className="font-semibold text-gray-900">Visit Us</p>
+                <p className="text-gray-700">{storeInfo.fullAddress}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3 rounded-lg border border-white/20 bg-white/90 backdrop-blur-sm p-4 shadow-lg">
-              <Clock className="h-5 w-5 shrink-0 text-accent" />
+            <div className="flex items-center gap-3 rounded-lg border border-white/30 bg-white/95 backdrop-blur-md p-4 shadow-xl">
+              <Clock className="h-5 w-5 shrink-0 text-gray-800" />
               <div className="text-sm">
-                <p className="font-medium text-foreground">Store Hours</p>
-                <p className="text-muted-foreground">{storeInfo.hoursShort.open}</p>
+                <p className="font-semibold text-gray-900">Store Hours</p>
+                <p className="text-gray-700">{storeInfo.hoursShort.open}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3 rounded-lg border border-white/20 bg-white/90 backdrop-blur-sm p-4 shadow-lg">
-              <Phone className="h-5 w-5 shrink-0 text-accent" />
+            <div className="flex items-center gap-3 rounded-lg border border-white/30 bg-white/95 backdrop-blur-md p-4 shadow-xl">
+              <Phone className="h-5 w-5 shrink-0 text-gray-800" />
               <div className="text-sm">
-                <p className="font-medium text-foreground">Call Us</p>
-                <p className="text-muted-foreground">{storeInfo.phone}</p>
+                <p className="font-semibold text-gray-900">Call Us</p>
+                <p className="text-gray-700">{storeInfo.phone}</p>
               </div>
             </div>
           </div>
