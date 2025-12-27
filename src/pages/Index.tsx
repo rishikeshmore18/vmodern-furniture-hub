@@ -1,14 +1,14 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, MapPin, Phone, Clock } from 'lucide-react';
+import { ArrowRight, MapPin, Phone, Clock, Loader2 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { ProductGrid } from '@/components/products/ProductGrid';
 import { Button } from '@/components/ui/button';
 import { storeInfo } from '@/data/storeInfo';
-import { getFeaturedProducts, getTaggedProducts } from '@/data/mockProducts';
+import { usePublicProducts } from '@/hooks/useProducts';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const Index = () => {
-  const featuredProducts = getFeaturedProducts();
+  const { featuredProducts, getTaggedProducts, isLoading } = usePublicProducts();
   const newArrivals = getTaggedProducts('new');
   const onSale = getTaggedProducts('sale');
   const staffPicks = getTaggedProducts('staff_pick');

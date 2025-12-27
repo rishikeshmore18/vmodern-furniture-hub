@@ -9,6 +9,7 @@ import FloorSamples from "./pages/FloorSamples";
 import OnlineInventory from "./pages/OnlineInventory";
 import ProductDetail from "./pages/ProductDetail";
 import Admin from "./pages/Admin";
+import Auth from "./pages/Auth";
 import Invoice from "./pages/Invoice";
 import NotFound from "./pages/NotFound";
 
@@ -34,6 +35,7 @@ const App = () => (
             <Route path="/online-inventory" element={<OnlineInventory />} />
             <Route path="/product/:id" element={<ProductDetail />} />
             <Route path="/admin" element={<Admin />} />
+            <Route path="/auth" element={<Auth />} />
             <Route path="/invoice" element={<Invoice />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

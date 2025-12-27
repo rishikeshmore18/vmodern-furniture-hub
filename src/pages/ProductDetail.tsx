@@ -1,14 +1,37 @@
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Phone, MapPin, Clock, Tag } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ArrowLeft, Phone, MapPin, Clock, Tag, Loader2 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { getProductById } from '@/data/mockProducts';
+import { useProducts } from '@/hooks/useProducts';
 import { storeInfo } from '@/data/storeInfo';
+import { Product } from '@/types/product';
 
 const ProductDetail = () => {
   const { id } = useParams<{ id: string }>();
-  const product = id ? getProductById(id) : undefined;
+  const { getProductById } = useProducts();
+  const [product, setProduct] = useState<Product | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (id) {
+      getProductById(id).then((p) => {
+        setProduct(p);
+        setIsLoading(false);
+      });
+    }
+  }, [id, getProductById]);
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="container py-16 flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </Layout>
+    );
+  }
 
   if (!product) {
     return (
