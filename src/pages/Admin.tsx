@@ -8,7 +8,8 @@ import {
   Trash2,
   Store,
   Globe,
-  LogOut
+  LogOut,
+  Menu
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,6 +49,11 @@ import { ImageUpload } from '@/components/admin/ImageUpload';
 import { SetItemsEditor } from '@/components/admin/SetItemsEditor';
 import { CategorySelector } from '@/components/admin/CategorySelector';
 import InvoicePage from '@/components/admin/InvoicePage';
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+} from '@/components/ui/sheet';
 
 type AdminView = 'dashboard' | 'products' | 'invoices';
 
@@ -59,6 +65,7 @@ const Admin = () => {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [activeView, setActiveView] = useState<AdminView>('dashboard');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Simple auth check
   const handleLogin = () => {
@@ -210,64 +217,108 @@ const Admin = () => {
     );
   }
 
+  // Sidebar navigation component (reusable for desktop and mobile)
+  const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => (
+    <>
+      <div className="mb-8">
+        <h1 className="text-xl font-semibold text-foreground">Admin Panel</h1>
+        <p className="text-sm text-muted-foreground">Vmodern Furniture</p>
+      </div>
+
+      <nav className="flex-1 space-y-1">
+        <button
+          onClick={() => {
+            setActiveView('dashboard');
+            onNavigate?.();
+          }}
+          className={cn(
+            'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+            activeView === 'dashboard'
+              ? 'bg-primary text-primary-foreground'
+              : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+          )}
+        >
+          <LayoutDashboard className="h-4 w-4" />
+          Dashboard
+        </button>
+        <button
+          onClick={() => {
+            setActiveView('products');
+            onNavigate?.();
+          }}
+          className={cn(
+            'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+            activeView === 'products'
+              ? 'bg-primary text-primary-foreground'
+              : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+          )}
+        >
+          <Package className="h-4 w-4" />
+          Products
+        </button>
+        <button
+          onClick={() => {
+            setActiveView('invoices');
+            onNavigate?.();
+          }}
+          className={cn(
+            'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+            activeView === 'invoices'
+              ? 'bg-primary text-primary-foreground'
+              : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+          )}
+        >
+          <FileText className="h-4 w-4" />
+          Invoices
+        </button>
+      </nav>
+
+      <Button variant="outline" onClick={handleLogout} className="mt-auto">
+        <LogOut className="mr-2 h-4 w-4" />
+        Logout
+      </Button>
+    </>
+  );
+
   return (
     <div className="min-h-screen bg-background flex">
-      {/* Sidebar */}
-      <aside className="w-64 border-r border-border bg-card p-4 flex flex-col no-print">
+      {/* Desktop Sidebar */}
+      <aside className="hidden md:flex w-64 border-r border-border bg-card p-4 flex-col no-print">
+        <SidebarContent />
+      </aside>
+
+      {/* Mobile Sidebar */}
+      <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+        <SheetContent side="left" className="w-64 p-4">
+          <SidebarContent onNavigate={() => setIsMobileMenuOpen(false)} />
+        </SheetContent>
+      </Sheet>
         <div className="mb-8">
           <h1 className="text-xl font-semibold text-foreground">Admin Panel</h1>
           <p className="text-sm text-muted-foreground">Vmodern Furniture</p>
         </div>
 
-        <nav className="flex-1 space-y-1">
-          <button
-            onClick={() => setActiveView('dashboard')}
-            className={cn(
-              'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-              activeView === 'dashboard'
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-            )}
-          >
-            <LayoutDashboard className="h-4 w-4" />
-            Dashboard
-          </button>
-          <button
-            onClick={() => setActiveView('products')}
-            className={cn(
-              'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-              activeView === 'products'
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-            )}
-          >
-            <Package className="h-4 w-4" />
-            Products
-          </button>
-          <button
-            onClick={() => setActiveView('invoices')}
-            className={cn(
-              'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-              activeView === 'invoices'
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-            )}
-          >
-            <FileText className="h-4 w-4" />
-            Invoices
-          </button>
-        </nav>
-
-        <Button variant="outline" onClick={handleLogout} className="mt-auto">
-          <LogOut className="mr-2 h-4 w-4" />
-          Logout
-        </Button>
-      </aside>
-
       {/* Main Content */}
       <main className="flex-1 overflow-auto">
+        {/* Mobile Header */}
+        <div className="md:hidden sticky top-0 z-40 border-b border-border bg-card p-4 flex items-center justify-between">
+          <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <Menu className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+          </Sheet>
+          <div>
+            <h1 className="text-lg font-semibold text-foreground">Admin Panel</h1>
+            <p className="text-xs text-muted-foreground">Vmodern Furniture</p>
+          </div>
+          <Button variant="ghost" size="icon" onClick={handleLogout}>
+            <LogOut className="h-5 w-5" />
+          </Button>
+        </div>
         {activeView === 'dashboard' && (
-          <div className="p-8">
+          <div className="p-4 sm:p-6 md:p-8">
             <div className="mb-8">
               <h2 className="text-2xl font-semibold text-foreground">Dashboard</h2>
               <p className="text-muted-foreground">Overview of your inventory</p>
@@ -315,7 +366,7 @@ const Admin = () => {
               <CardHeader>
                 <CardTitle>Quick Actions</CardTitle>
               </CardHeader>
-              <CardContent className="flex gap-4">
+              <CardContent className="flex flex-col sm:flex-row gap-4">
                 <Button onClick={() => { setActiveView('products'); setIsDialogOpen(true); }}>
                   <Plus className="mr-2 h-4 w-4" />
                   Add Product
@@ -330,17 +381,17 @@ const Admin = () => {
         )}
 
         {activeView === 'products' && (
-          <div className="p-8">
+          <div className="p-4 sm:p-6 md:p-8">
             {/* Product Management */}
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
+              <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <CardTitle>Product Management</CardTitle>
-                <div className="flex items-center gap-4">
+                <div className="flex flex-col sm:flex-row w-full sm:w-auto items-stretch sm:items-center gap-4">
                   <Select 
                     value={categoryFilter} 
                     onValueChange={(v) => setCategoryFilter(v as 'all' | ProductCategory)}
                   >
-                    <SelectTrigger className="w-[180px]">
+                    <SelectTrigger className="w-full sm:w-[180px]">
                       <SelectValue placeholder="Filter by category" />
                     </SelectTrigger>
                     <SelectContent>
@@ -359,7 +410,7 @@ const Admin = () => {
                         Add Product
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+                    <DialogContent className="max-h-[90vh] overflow-y-auto w-[95vw] sm:max-w-2xl">
                       <DialogHeader>
                         <DialogTitle>
                           {editingProduct ? 'Edit Product' : 'Add New Product'}
@@ -372,7 +423,7 @@ const Admin = () => {
                           <RadioGroup
                             value={formData.inventoryType}
                             onValueChange={(v) => setFormData({ ...formData, inventoryType: v as ProductCategory })}
-                            className="mt-3 flex gap-6"
+                            className="mt-3 flex flex-col sm:flex-row gap-4 sm:gap-6"
                           >
                             <div className="flex items-center space-x-2">
                               <RadioGroupItem value="floor_sample" id="floor_sample" />
@@ -424,7 +475,7 @@ const Admin = () => {
                           onChange={(url) => setFormData({ ...formData, mainImageUrl: url })}
                         />
 
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div>
                             <Label htmlFor="price">Set Price / Total ($)</Label>
                             <Input
@@ -504,7 +555,7 @@ const Admin = () => {
                             </div>
                           </div>
                         </div>
-                        <div className="flex justify-end gap-2 pt-4">
+                        <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-4">
                           <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                             Cancel
                           </Button>
@@ -518,7 +569,72 @@ const Admin = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto">
+                {/* Mobile Card View */}
+                <div className="md:hidden space-y-4">
+                  {filteredProducts.map((product) => (
+                    <Card key={product.id}>
+                      <CardContent className="p-4">
+                        <div className="flex gap-4">
+                          <img
+                            src={product.mainImageUrl}
+                            alt={product.name}
+                            className="h-20 w-20 rounded object-cover flex-shrink-0"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-medium text-foreground truncate">{product.name}</h3>
+                            <div className="mt-2 space-y-1">
+                              <div className="flex items-center gap-2">
+                                  <Badge variant={product.category === 'floor_sample' ? 'default' : 'secondary'} className="text-xs">
+                                    {product.category === 'floor_sample' ? 'Floor Sample' : 'Online'}
+                                  </Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                {product.productType || '-'}
+                              </p>
+                              <div className="flex items-baseline gap-2">
+                                <span className="text-sm font-semibold text-foreground">
+                                  ${product.priceFinal.toFixed(2)}
+                                </span>
+                                {product.priceOriginal !== product.priceFinal && (
+                                  <span className="text-xs text-muted-foreground line-through">
+                                    ${product.priceOriginal.toFixed(2)}
+                                  </span>
+                                )}
+                                {product.discountPercent > 0 && (
+                                  <Badge variant="highlight" className="text-xs">
+                                    {product.discountPercent}% OFF
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                            <div className="mt-3 flex gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => openEditDialog(product)}
+                                className="flex-1"
+                              >
+                                <Edit className="h-4 w-4 mr-2" />
+                                Edit
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteProduct(product.id)}
+                                className="text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+                {/* Desktop Table View */}
+                <div className="hidden md:block overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
