@@ -156,6 +156,38 @@ export type Database = {
           },
         ]
       }
+      set_item_images: {
+        Row: {
+          id: string
+          set_item_id: string
+          image_url: string
+          display_order: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          set_item_id: string
+          image_url: string
+          display_order?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          set_item_id?: string
+          image_url?: string
+          display_order?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "set_item_images_set_item_id_fkey"
+            columns: ["set_item_id"]
+            isOneToOne: false
+            referencedRelation: "set_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subcategories: {
         Row: {
           category_id: string

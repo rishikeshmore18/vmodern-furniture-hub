@@ -126,6 +126,12 @@ const Admin = () => {
       ? product.imageUrls 
       : (product.mainImageUrl ? [product.mainImageUrl] : []);
     
+    // Process set items to ensure imageUrls are properly loaded
+    const processedSetItems = (product.setItems || []).map((item) => ({
+      ...item,
+      imageUrls: item.imageUrls || (item.imageUrl ? [item.imageUrl] : []),
+    }));
+    
     setFormData({
       name: product.name,
       inventoryType: product.category,
@@ -139,12 +145,40 @@ const Admin = () => {
       isNew: product.isNew,
       tagSale: product.tags.includes('sale'),
       tagStaffPick: product.tags.includes('staff_pick'),
-      setItems: product.setItems || [],
+      setItems: processedSetItems,
     });
     setIsDialogOpen(true);
   };
 
   const handleSaveProduct = async () => {
+    // Validation
+    if (!formData.name.trim()) {
+      toast({
+        title: 'Validation Error',
+        description: 'Product name is required',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!formData.description.trim()) {
+      toast({
+        title: 'Validation Error',
+        description: 'Product description is required',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (formData.priceOriginal <= 0) {
+      toast({
+        title: 'Validation Error',
+        description: 'Product price must be greater than 0',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const tags: ('new' | 'sale' | 'staff_pick')[] = [];
     if (formData.isNew) tags.push('new');
     if (formData.tagSale) tags.push('sale');
@@ -155,19 +189,25 @@ const Admin = () => {
       ? imageUrls[0] 
       : (formData.mainImageUrl || 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800&q=80');
 
+    // Process set items to ensure imageUrls are properly set
+    const processedSetItems = formData.setItems.map((item) => ({
+      ...item,
+      imageUrl: item.imageUrls && item.imageUrls.length > 0 ? item.imageUrls[0] : item.imageUrl,
+    }));
+
     const productData = {
-      name: formData.name,
+      name: formData.name.trim(),
       category: formData.inventoryType,
       productType: formData.productType || undefined,
       subcategory: formData.subcategory || undefined,
-      description: formData.description,
+      description: formData.description.trim(),
       priceOriginal: formData.priceOriginal,
       discountPercent: formData.discountPercent,
       isNew: formData.isNew,
       tags,
       mainImageUrl: mainImageUrl,
       imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
-      setItems: formData.setItems.length > 0 ? formData.setItems : undefined,
+      setItems: processedSetItems.length > 0 ? processedSetItems : undefined,
     };
 
     setIsSaving(true);
@@ -570,8 +610,16 @@ const Admin = () => {
                             Cancel
                           </Button>
                           <Button onClick={handleSaveProduct} disabled={isSaving}>
-                            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            {editingProduct ? 'Update' : 'Add'} Product
+                            {isSaving ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Saving...
+                              </>
+                            ) : (
+                              <>
+                                {editingProduct ? 'Update' : 'Add'} Product
+                              </>
+                            )}
                           </Button>
                         </div>
                       </div>

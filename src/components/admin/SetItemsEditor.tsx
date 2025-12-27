@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SetItem } from '@/types/product';
-import { ImageUpload } from './ImageUpload';
+import { MultipleImageUpload } from './MultipleImageUpload';
 
 interface SetItemsEditorProps {
   items: SetItem[];
@@ -16,12 +16,12 @@ export function SetItemsEditor({ items, onChange }: SetItemsEditorProps) {
       id: Date.now().toString(),
       name: '',
       price: 0,
-      imageUrl: '',
+      imageUrls: [],
     };
     onChange([...items, newItem]);
   };
 
-  const updateItem = (id: string, field: keyof SetItem, value: string | number) => {
+  const updateItem = (id: string, field: keyof SetItem, value: string | number | string[]) => {
     onChange(
       items.map((item) =>
         item.id === id ? { ...item, [field]: value } : item
@@ -102,10 +102,20 @@ export function SetItemsEditor({ items, onChange }: SetItemsEditorProps) {
               </div>
               
               <div className="mt-4">
-                <ImageUpload
-                  label="Item Photo (Optional)"
-                  value={item.imageUrl || ''}
-                  onChange={(url) => updateItem(item.id, 'imageUrl', url)}
+                <MultipleImageUpload
+                  label="Item Photos (Optional)"
+                  value={item.imageUrls || (item.imageUrl ? [item.imageUrl] : [])}
+                  onChange={(urls) => {
+                    // Limit to 10 images
+                    const limitedUrls = urls.slice(0, 10);
+                    updateItem(item.id, 'imageUrls', limitedUrls);
+                    // Keep imageUrl for backward compatibility (first image)
+                    if (limitedUrls.length > 0) {
+                      updateItem(item.id, 'imageUrl', limitedUrls[0]);
+                    } else {
+                      updateItem(item.id, 'imageUrl', '');
+                    }
+                  }}
                 />
               </div>
             </div>

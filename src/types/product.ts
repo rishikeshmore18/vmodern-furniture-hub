@@ -10,7 +10,8 @@ export interface SetItem {
   id: string;
   name: string;
   price: number;
-  imageUrl?: string;
+  imageUrl?: string; // Deprecated: kept for backward compatibility
+  imageUrls?: string[]; // Multiple images support
 }
 
 export interface Product {
