@@ -29,3 +29,4 @@ CREATE POLICY "Admins can delete set item images"
   ON public.set_item_images FOR DELETE
   USING (public.has_role(auth.uid(), 'admin'));
 
+
