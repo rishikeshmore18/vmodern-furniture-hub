@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { useProducts } from '@/hooks/useProducts';
 import { storeInfo } from '@/data/storeInfo';
 import { Product } from '@/types/product';
+import { ProductGallery } from '@/components/products/ProductGallery';
 
 const ProductDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -62,13 +63,14 @@ const ProductDetail = () => {
           Back to {isFloorSample ? 'Floor Samples' : 'Online Inventory'}
         </Link>
 
-        <div className="grid gap-10 md:grid-cols-2">
-          {/* Product Image */}
-          <div className="overflow-hidden rounded-xl border border-border bg-muted">
-            <img
-              src={product.mainImageUrl}
-              alt={product.name}
-              className="h-full w-full object-cover"
+        <div className="grid gap-8 lg:gap-12 md:grid-cols-2">
+          {/* Product Gallery - Amazon style */}
+          <div className="md:sticky md:top-24 md:self-start">
+            <ProductGallery 
+              images={product.imageUrls && product.imageUrls.length > 0 
+                ? product.imageUrls 
+                : [product.mainImageUrl]} 
+              productName={product.name} 
             />
           </div>
 
