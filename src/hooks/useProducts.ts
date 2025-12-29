@@ -496,35 +496,47 @@ export function useProducts() {
 
   const getProductById = async (id: string): Promise<Product | null> => {
     try {
-      const { data: dbProduct, error: productError } = await supabase
-        .from('products')
-        .select('*')
-        .eq('id', id)
-        .maybeSingle();
+      // First check if product is already in cache
+      const cachedProduct = products.find((p) => p.id === id);
+      if (cachedProduct) {
+        return cachedProduct;
+      }
 
-      if (productError) throw productError;
-      if (!dbProduct) return null;
+      // If not in cache, fetch from database with parallel queries
+      const [productResult, imagesResult, setItemsResult] = await Promise.all([
+        supabase
+          .from('products')
+          .select('*')
+          .eq('id', id)
+          .maybeSingle(),
+        supabase
+          .from('product_images')
+          .select('*')
+          .eq('product_id', id),
+        supabase
+          .from('set_items')
+          .select('*')
+          .eq('product_id', id),
+      ]);
 
-      const { data: imagesData } = await supabase
-        .from('product_images')
-        .select('*')
-        .eq('product_id', id);
+      if (productResult.error) throw productResult.error;
+      if (!productResult.data) return null;
 
-      const { data: setItemsData } = await supabase
-        .from('set_items')
-        .select('*')
-        .eq('product_id', id);
-
-      const setItemIds = (setItemsData || []).map((item) => item.id);
-      const { data: setItemImagesData } = await supabase
-        .from('set_item_images')
-        .select('*')
-        .in('set_item_id', setItemIds);
+      // Fetch set item images if we have set items
+      const setItemIds = (setItemsResult.data || []).map((item) => item.id);
+      let setItemImagesData = null;
+      if (setItemIds.length > 0) {
+        const { data } = await supabase
+          .from('set_item_images')
+          .select('*')
+          .in('set_item_id', setItemIds);
+        setItemImagesData = data;
+      }
 
       return dbToProduct(
-        dbProduct as DbProduct,
-        (imagesData || []) as DbProductImage[],
-        (setItemsData || []) as DbSetItem[],
+        productResult.data as DbProduct,
+        (imagesResult.data || []) as DbProductImage[],
+        (setItemsResult.data || []) as DbSetItem[],
         (setItemImagesData || []) as DbSetItemImage[]
       );
     } catch (err) {

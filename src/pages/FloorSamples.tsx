@@ -48,13 +48,7 @@ const FloorSamples = () => {
           onCategoryChange={setSelectedCategory}
         />
 
-        {isLoading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
-        ) : (
-          <ProductGrid products={filteredProducts} />
-        )}
+        <ProductGrid products={filteredProducts} isLoading={isLoading} />
       </div>
     </Layout>
   );

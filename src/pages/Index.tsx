@@ -136,16 +136,16 @@ const Index = () => {
               <TabsTrigger value="picks">Staff Picks</TabsTrigger>
             </TabsList>
             <TabsContent value="featured">
-              <ProductGrid products={featuredProducts} />
+              <ProductGrid products={featuredProducts} isLoading={isLoading} />
             </TabsContent>
             <TabsContent value="new">
-              <ProductGrid products={newArrivals} />
+              <ProductGrid products={newArrivals} isLoading={isLoading} />
             </TabsContent>
             <TabsContent value="sale">
-              <ProductGrid products={onSale} />
+              <ProductGrid products={onSale} isLoading={isLoading} />
             </TabsContent>
             <TabsContent value="picks">
-              <ProductGrid products={staffPicks} />
+              <ProductGrid products={staffPicks} isLoading={isLoading} />
             </TabsContent>
           </Tabs>
         </div>

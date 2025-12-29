@@ -11,24 +11,46 @@ import { ProductGallery } from '@/components/products/ProductGallery';
 
 const ProductDetail = () => {
   const { id } = useParams<{ id: string }>();
-  const { getProductById } = useProducts();
+  const { products, getProductById } = useProducts();
   const [product, setProduct] = useState<Product | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (id) {
+      // First check if product is already in cache (from useProducts)
+      const cachedProduct = products.find((p) => p.id === id);
+      if (cachedProduct) {
+        setProduct(cachedProduct);
+        setIsLoading(false);
+        return;
+      }
+
+      // If not in cache, fetch it
       getProductById(id).then((p) => {
         setProduct(p);
         setIsLoading(false);
       });
     }
-  }, [id, getProductById]);
+  }, [id, getProductById, products]);
 
   if (isLoading) {
     return (
       <Layout>
-        <div className="container py-16 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <div className="container py-8 md:py-12">
+          <div className="grid gap-8 lg:gap-12 md:grid-cols-2">
+            {/* Image skeleton */}
+            <div className="md:sticky md:top-24 md:self-start">
+              <div className="aspect-square md:aspect-[4/3] rounded-xl border border-border bg-muted animate-pulse" />
+            </div>
+            {/* Content skeleton */}
+            <div className="flex flex-col space-y-6">
+              <div className="h-8 bg-muted rounded w-1/4 animate-pulse" />
+              <div className="h-10 bg-muted rounded w-3/4 animate-pulse" />
+              <div className="h-8 bg-muted rounded w-1/3 animate-pulse" />
+              <div className="h-32 bg-muted rounded w-full animate-pulse" />
+              <div className="h-12 bg-muted rounded w-full animate-pulse" />
+            </div>
+          </div>
         </div>
       </Layout>
     );

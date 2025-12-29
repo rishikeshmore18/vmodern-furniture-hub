@@ -68,6 +68,9 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
               transformOrigin: `${zoomPosition.x}% ${zoomPosition.y}%` 
             } : undefined}
             draggable={false}
+            loading={selectedIndex === 0 ? "eager" : "lazy"}
+            decoding="async"
+            fetchPriority={selectedIndex === 0 ? "high" : "auto"}
           />
           
           {/* Zoom indicator */}
@@ -119,6 +122,8 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
                 alt={`${productName} thumbnail ${index + 1}`}
                 className="h-full w-full object-cover"
                 draggable={false}
+                loading="lazy"
+                decoding="async"
               />
               {selectedIndex === index && (
                 <div className="absolute inset-0 bg-primary/10" />

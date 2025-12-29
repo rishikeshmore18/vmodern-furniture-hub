@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Link } from 'react-router-dom';
 import { Product } from '@/types/product';
 import { Badge } from '@/components/ui/badge';
@@ -7,7 +8,7 @@ interface ProductCardProps {
   product: Product;
 }
 
-export function ProductCard({ product }: ProductCardProps) {
+export const ProductCard = memo(function ProductCard({ product }: ProductCardProps) {
   const hasDiscount = product.discountPercent > 0;
 
   return (
@@ -22,6 +23,8 @@ export function ProductCard({ product }: ProductCardProps) {
             src={product.mainImageUrl}
             alt={product.name}
             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+            loading="lazy"
+            decoding="async"
           />
           {/* Tags */}
           <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
@@ -95,4 +98,4 @@ export function ProductCard({ product }: ProductCardProps) {
       </div>
     </Link>
   );
-}
+});

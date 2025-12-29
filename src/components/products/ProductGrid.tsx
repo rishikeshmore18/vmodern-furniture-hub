@@ -1,17 +1,30 @@
 import { Product } from '@/types/product';
 import { ProductCard } from './ProductCard';
+import { ProductCardSkeleton } from './ProductCardSkeleton';
 
 interface ProductGridProps {
   products: Product[];
   columns?: 2 | 3 | 4;
+  isLoading?: boolean;
+  skeletonCount?: number;
 }
 
-export function ProductGrid({ products, columns = 3 }: ProductGridProps) {
+export function ProductGrid({ products, columns = 3, isLoading = false, skeletonCount = 6 }: ProductGridProps) {
   const gridCols = {
     2: 'grid-cols-1 sm:grid-cols-2',
     3: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
     4: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4',
   };
+
+  if (isLoading) {
+    return (
+      <div className={`grid gap-6 ${gridCols[columns]}`}>
+        {Array.from({ length: skeletonCount }).map((_, index) => (
+          <ProductCardSkeleton key={index} />
+        ))}
+      </div>
+    );
+  }
 
   if (products.length === 0) {
     return (
