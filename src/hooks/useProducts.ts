@@ -104,54 +104,67 @@ export function useProducts() {
       setError(null);
 
       // Fetch all products
-      const { data: productsData, error: productsError } = await supabase
+      const productsQuery = supabase
         .from('products')
         .select('*')
         .order('created_at', { ascending: false });
+
+      const { data: productsData, error: productsError } = await productsQuery;
 
       if (productsError) throw productsError;
 
       if (!productsData || productsData.length === 0) {
         setProducts([]);
+        setIsLoading(false);
         return;
       }
 
       const productIds = productsData.map((p) => p.id);
 
-      // Fetch all images for these products
-      const { data: imagesData, error: imagesError } = await supabase
-        .from('product_images')
-        .select('*')
-        .in('product_id', productIds);
+      // Fetch all related data in parallel for better performance
+      const [imagesResult, setItemsResult, setItemImagesResult] = await Promise.all([
+        // Fetch all images for these products
+        supabase
+          .from('product_images')
+          .select('*')
+          .in('product_id', productIds),
+        // Fetch all set items for these products
+        supabase
+          .from('set_items')
+          .select('*')
+          .in('product_id', productIds),
+        // Pre-fetch set item images query (will be executed after we get set items)
+        Promise.resolve({ data: null, error: null } as { data: null; error: null }),
+      ]);
 
-      if (imagesError) throw imagesError;
+      if (imagesResult.error) throw imagesResult.error;
+      if (setItemsResult.error) throw setItemsResult.error;
 
-      // Fetch all set items for these products
-      const { data: setItemsData, error: setItemsError } = await supabase
-        .from('set_items')
-        .select('*')
-        .in('product_id', productIds);
+      // Fetch set item images if we have set items
+      const setItemIds = (setItemsResult.data || []).map((item) => item.id);
+      let setItemImagesData = null;
+      if (setItemIds.length > 0) {
+        const { data, error: setItemImagesError } = await supabase
+          .from('set_item_images')
+          .select('*')
+          .in('set_item_id', setItemIds);
 
-      if (setItemsError) throw setItemsError;
-
-      // Fetch all set item images
-      const setItemIds = (setItemsData || []).map((item) => item.id);
-      const { data: setItemImagesData, error: setItemImagesError } = await supabase
-        .from('set_item_images')
-        .select('*')
-        .in('set_item_id', setItemIds);
-
-      if (setItemImagesError) {
-        // Table might not exist yet, continue without set item images
-        console.warn('set_item_images table not found, continuing without set item images');
+        if (setItemImagesError) {
+          // Table might not exist yet, continue without set item images
+          console.warn('set_item_images table not found, continuing without set item images');
+        } else {
+          setItemImagesData = data;
+        }
       }
 
       // Convert to frontend products
+      const imagesData = imagesResult.data || [];
+      const setItemsData = setItemsResult.data || [];
       const frontendProducts = productsData.map((dbProduct) => {
-        const productImages = (imagesData || []).filter(
+        const productImages = imagesData.filter(
           (img) => img.product_id === dbProduct.id
         ) as DbProductImage[];
-        const productSetItems = (setItemsData || []).filter(
+        const productSetItems = setItemsData.filter(
           (item) => item.product_id === dbProduct.id
         ) as DbSetItem[];
         const productSetItemImages = ((setItemImagesData || []) as DbSetItemImage[]).filter(
@@ -262,11 +275,36 @@ export function useProducts() {
         }
       }
 
+      // Build the new product object and add it optimistically to state
+      const now = new Date().toISOString();
+      const newFrontendProduct: Product = {
+        id: newProduct.id,
+        name: product.name,
+        category: product.category,
+        productType: product.productType,
+        subcategory: product.subcategory,
+        description: product.description,
+        priceOriginal: product.priceOriginal,
+        discountPercent: product.discountPercent,
+        priceFinal: calculateFinalPrice(product.priceOriginal, product.discountPercent),
+        isNew: product.isNew,
+        tags: product.tags,
+        mainImageUrl: product.mainImageUrl,
+        imageUrls: product.imageUrls,
+        setItems: product.setItems,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      // Optimistically update state
+      setProducts((prev) => [newFrontendProduct, ...prev]);
+
       toast({ title: 'Product added successfully' });
-      await fetchProducts();
       return newProduct;
     } catch (err: any) {
       console.error('Error adding product:', err);
+      // Refetch to restore correct state if optimistic update was applied
+      await fetchProducts();
       const errorMessage = err?.message || 'Unknown error occurred';
       toast({
         title: 'Failed to add product',
@@ -386,10 +424,41 @@ export function useProducts() {
         }
       }
 
+      // Optimistically update state
+      const now = new Date().toISOString();
+      const updatedProduct: Product = {
+        id,
+        name: product.name,
+        category: product.category,
+        productType: product.productType,
+        subcategory: product.subcategory,
+        description: product.description,
+        priceOriginal: product.priceOriginal,
+        discountPercent: product.discountPercent,
+        priceFinal: calculateFinalPrice(product.priceOriginal, product.discountPercent),
+        isNew: product.isNew,
+        tags: product.tags,
+        mainImageUrl: product.mainImageUrl,
+        imageUrls: product.imageUrls,
+        setItems: product.setItems,
+        createdAt: '', // Will be preserved from existing product
+        updatedAt: now,
+      };
+
+      setProducts((prev) =>
+        prev.map((p) => {
+          if (p.id === id) {
+            return { ...updatedProduct, createdAt: p.createdAt };
+          }
+          return p;
+        })
+      );
+
       toast({ title: 'Product updated successfully' });
-      await fetchProducts();
     } catch (err: any) {
       console.error('Error updating product:', err);
+      // Refetch to restore correct state if optimistic update was applied
+      await fetchProducts();
       const errorMessage = err?.message || 'Unknown error occurred';
       toast({
         title: 'Failed to update product',
@@ -402,12 +471,18 @@ export function useProducts() {
 
   const deleteProduct = async (id: string) => {
     try {
+      // Optimistically remove from state
+      setProducts((prev) => prev.filter((p) => p.id !== id));
+
       const { error } = await supabase.from('products').delete().eq('id', id);
 
-      if (error) throw error;
+      if (error) {
+        // If delete fails, refetch to restore state
+        await fetchProducts();
+        throw error;
+      }
 
       toast({ title: 'Product deleted' });
-      await fetchProducts();
     } catch (err) {
       console.error('Error deleting product:', err);
       toast({
@@ -478,6 +553,7 @@ export function usePublicProducts() {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
+        setIsLoading(true);
         const { data: productsData, error: productsError } = await supabase
           .from('products')
           .select('*')
@@ -487,32 +563,42 @@ export function usePublicProducts() {
 
         if (!productsData || productsData.length === 0) {
           setProducts([]);
+          setIsLoading(false);
           return;
         }
 
         const productIds = productsData.map((p) => p.id);
 
-        const { data: imagesData } = await supabase
-          .from('product_images')
-          .select('*')
-          .in('product_id', productIds);
+        // Fetch all related data in parallel for better performance
+        const [imagesResult, setItemsResult] = await Promise.all([
+          supabase
+            .from('product_images')
+            .select('*')
+            .in('product_id', productIds),
+          supabase
+            .from('set_items')
+            .select('*')
+            .in('product_id', productIds),
+        ]);
 
-        const { data: setItemsData } = await supabase
-          .from('set_items')
-          .select('*')
-          .in('product_id', productIds);
+        // Fetch set item images if we have set items
+        const setItemIds = (setItemsResult.data || []).map((item) => item.id);
+        let setItemImagesData = null;
+        if (setItemIds.length > 0) {
+          const { data } = await supabase
+            .from('set_item_images')
+            .select('*')
+            .in('set_item_id', setItemIds);
+          setItemImagesData = data;
+        }
 
-        const setItemIds = (setItemsData || []).map((item) => item.id);
-        const { data: setItemImagesData } = await supabase
-          .from('set_item_images')
-          .select('*')
-          .in('set_item_id', setItemIds);
-
+        const imagesData = imagesResult.data || [];
+        const setItemsData = setItemsResult.data || [];
         const frontendProducts = productsData.map((dbProduct) => {
-          const productImages = (imagesData || []).filter(
+          const productImages = imagesData.filter(
             (img) => img.product_id === dbProduct.id
           ) as DbProductImage[];
-          const productSetItems = (setItemsData || []).filter(
+          const productSetItems = setItemsData.filter(
             (item) => item.product_id === dbProduct.id
           ) as DbSetItem[];
           const productSetItemImages = ((setItemImagesData || []) as DbSetItemImage[]).filter(
