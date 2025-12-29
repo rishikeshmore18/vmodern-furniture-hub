@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { storeInfo } from '@/data/storeInfo';
 import { usePublicProducts } from '@/hooks/useProducts';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Carousel, CarouselContent, CarouselItem } from '@/components/ui/carousel';
+import Autoplay from 'embla-carousel-autoplay';
 
 const Index = () => {
   const { featuredProducts, getTaggedProducts, isLoading } = usePublicProducts();
@@ -16,15 +18,27 @@ const Index = () => {
   return (
     <Layout>
       {/* Hero Section - Dynamic sizing that adapts to content and viewport */}
-      <section className="relative overflow-hidden h-[600px] sm:h-[650px] md:h-[700px] lg:h-[750px]">
-        {/* Background Image */}
-        <div className="absolute inset-0 z-0">
-          <img
-            src="/hero-carousel-1.png"
-            alt="Vmodern Furniture Store"
-            className="w-full h-full object-cover"
-            loading="eager"
-          />
+      <section className="relative overflow-hidden h-[600px] sm:h-[650px] md:h-[700px] lg:h-[750px] bg-transparent">
+        {/* Carousel Background */}
+        <div className="absolute inset-0 z-0 h-full w-full hero-section-carousel">
+          <Carousel
+            opts={{ align: "start", loop: true }}
+            plugins={[Autoplay({ delay: 5000 })]}
+            className="h-full w-full"
+          >
+            <CarouselContent className="h-full -ml-0">
+              <CarouselItem className="h-full pl-0 basis-full">
+                <div className="hero-carousel-image-wrapper">
+                  <img src="/hero-carousel-1.png" alt="Vmodern Furniture Store Interior" loading="eager" />
+                </div>
+              </CarouselItem>
+              <CarouselItem className="h-full pl-0 basis-full">
+                <div className="hero-carousel-image-wrapper">
+                  <img src="/hero-carousel-2.png" alt="Vmodern Furniture Store Exterior" loading="eager" />
+                </div>
+              </CarouselItem>
+            </CarouselContent>
+          </Carousel>
         </div>
 
         {/* Overlay for better text readability */}
