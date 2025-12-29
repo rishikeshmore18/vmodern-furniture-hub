@@ -104,19 +104,29 @@ export function SetItemsEditor({ items, onChange }: SetItemsEditorProps) {
               <div className="mt-4 w-full">
                 <MultipleImageUpload
                   label="Item Photos (Optional)"
-                  value={item.imageUrls || (item.imageUrl ? [item.imageUrl] : [])}
+                  value={
+                    item.imageUrls && item.imageUrls.length > 0
+                      ? item.imageUrls
+                      : item.imageUrl
+                        ? [item.imageUrl]
+                        : []
+                  }
                   onChange={(urls) => {
                     // Limit to 10 images
                     const limitedUrls = urls.slice(0, 10);
-                    updateItem(item.id, 'imageUrls', limitedUrls);
-                    // Keep imageUrl for backward compatibility (first image)
-                    if (limitedUrls.length > 0) {
-                      updateItem(item.id, 'imageUrl', limitedUrls[0]);
-                    } else {
-                      updateItem(item.id, 'imageUrl', '');
-                    }
+                    // Update both imageUrls and imageUrl in a single state update
+                    onChange(
+                      items.map((it) =>
+                        it.id === item.id
+                          ? {
+                              ...it,
+                              imageUrls: limitedUrls,
+                              imageUrl: limitedUrls.length > 0 ? limitedUrls[0] : '',
+                            }
+                          : it
+                      )
+                    );
                   }}
-                  showPreview
                 />
               </div>
             </div>
