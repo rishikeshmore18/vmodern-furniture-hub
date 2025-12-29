@@ -459,7 +459,7 @@ const Admin = () => {
                           {editingProduct ? 'Edit Product' : 'Add New Product'}
                         </DialogTitle>
                       </DialogHeader>
-                      <div className="space-y-6 py-4">
+                      <fieldset disabled={isSaving} className="space-y-6 py-4">
                         {/* Inventory Type */}
                         <div>
                           <Label className="text-base font-medium">Inventory Type</Label>
@@ -606,10 +606,19 @@ const Admin = () => {
                           </div>
                         </div>
                         <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-4">
-                          <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isSaving}>
-                            Cancel
+                          <Button 
+                            type="button"
+                            variant="outline" 
+                            onClick={() => {
+                              if (isSaving) return;
+                              setIsDialogOpen(false);
+                              resetForm();
+                            }} 
+                            disabled={isSaving}
+                          >
+                            {isSaving ? 'Cancel' : 'Close'}
                           </Button>
-                          <Button onClick={handleSaveProduct} disabled={isSaving}>
+                          <Button type="button" onClick={handleSaveProduct} disabled={isSaving}>
                             {isSaving ? (
                               <>
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -622,7 +631,7 @@ const Admin = () => {
                             )}
                           </Button>
                         </div>
-                      </div>
+                      </fieldset>
                     </DialogContent>
                   </Dialog>
                 </div>

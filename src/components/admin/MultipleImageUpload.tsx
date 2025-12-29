@@ -15,9 +15,10 @@ interface MultipleImageUploadProps {
   value: string[];
   onChange: (urls: string[]) => void;
   label?: string;
+  showPreview?: boolean;
 }
 
-export function MultipleImageUpload({ value, onChange, label = 'Product Images' }: MultipleImageUploadProps) {
+export function MultipleImageUpload({ value, onChange, label = 'Product Images', showPreview = true }: MultipleImageUploadProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [urlInput, setUrlInput] = useState('');
   const [activeTab, setActiveTab] = useState<'url' | 'upload' | 'camera'>('url');

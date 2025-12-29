@@ -116,6 +116,7 @@ export function SetItemsEditor({ items, onChange }: SetItemsEditorProps) {
                       updateItem(item.id, 'imageUrl', '');
                     }
                   }}
+                  showPreview
                 />
               </div>
             </div>
