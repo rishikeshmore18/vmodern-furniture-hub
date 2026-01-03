@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Check } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -133,30 +134,45 @@ export function CategorySelector({
             </Button>
           </div>
         ) : (
-          <Select value={category || ''} onValueChange={handleCategorySelect}>
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder="Select category" />
-            </SelectTrigger>
-            <SelectContent>
-              {/* Always ensure a matching SelectItem exists for the current value */}
-              {needsHiddenCategoryItem && (
-                <SelectItem value={category} className="hidden">
+          <div className="space-y-2">
+            <Select value={category || ''} onValueChange={handleCategorySelect}>
+              <SelectTrigger className="mt-1">
+                {displayCategory ? (
+                  <span>{displayCategory}</span>
+                ) : (
+                  <SelectValue placeholder="Select category" />
+                )}
+              </SelectTrigger>
+              <SelectContent>
+                {/* Always ensure a matching SelectItem exists for the current value */}
+                {needsHiddenCategoryItem && (
+                  <SelectItem value={category} className="hidden">
+                    {displayCategory}
+                  </SelectItem>
+                )}
+                {categories.map((cat) => (
+                  <SelectItem key={cat.name} value={cat.name}>
+                    {cat.name}
+                  </SelectItem>
+                ))}
+                <SelectItem value="__custom__">
+                  <span className="flex items-center gap-2 text-primary">
+                    <Plus className="h-4 w-4" />
+                    Add Custom...
+                  </span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            {displayCategory && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground animate-in fade-in-0 slide-in-from-top-1 duration-200">
+                <Check className="h-3.5 w-3.5 text-green-500" />
+                <span>Selected:</span>
+                <Badge variant="secondary" className="font-medium">
                   {displayCategory}
-                </SelectItem>
-              )}
-              {categories.map((cat) => (
-                <SelectItem key={cat.name} value={cat.name}>
-                  {cat.name}
-                </SelectItem>
-              ))}
-              <SelectItem value="__custom__">
-                <span className="flex items-center gap-2 text-primary">
-                  <Plus className="h-4 w-4" />
-                  Add Custom...
-                </span>
-              </SelectItem>
-            </SelectContent>
-          </Select>
+                </Badge>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
@@ -184,29 +200,44 @@ export function CategorySelector({
               </Button>
             </div>
         ) : (
-          <Select value={subcategory || ''} onValueChange={handleSubcategorySelect}>
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder="Select subcategory" />
-            </SelectTrigger>
-            <SelectContent>
-              {needsHiddenSubcategoryItem && (
-                <SelectItem value={subcategory} className="hidden">
+          <div className="space-y-2">
+            <Select value={subcategory || ''} onValueChange={handleSubcategorySelect}>
+              <SelectTrigger className="mt-1">
+                {displaySubcategory ? (
+                  <span>{displaySubcategory}</span>
+                ) : (
+                  <SelectValue placeholder="Select subcategory" />
+                )}
+              </SelectTrigger>
+              <SelectContent>
+                {needsHiddenSubcategoryItem && (
+                  <SelectItem value={subcategory} className="hidden">
+                    {displaySubcategory}
+                  </SelectItem>
+                )}
+                {subcategories.map((sub) => (
+                  <SelectItem key={sub} value={sub}>
+                    {sub}
+                  </SelectItem>
+                ))}
+                <SelectItem value="__custom__">
+                  <span className="flex items-center gap-2 text-primary">
+                    <Plus className="h-4 w-4" />
+                    Add Custom...
+                  </span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            {displaySubcategory && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground animate-in fade-in-0 slide-in-from-top-1 duration-200">
+                <Check className="h-3.5 w-3.5 text-green-500" />
+                <span>Selected:</span>
+                <Badge variant="secondary" className="font-medium">
                   {displaySubcategory}
-                </SelectItem>
-              )}
-              {subcategories.map((sub) => (
-                <SelectItem key={sub} value={sub}>
-                  {sub}
-                </SelectItem>
-              ))}
-              <SelectItem value="__custom__">
-                <span className="flex items-center gap-2 text-primary">
-                  <Plus className="h-4 w-4" />
-                  Add Custom...
-                </span>
-              </SelectItem>
-            </SelectContent>
-          </Select>
+                </Badge>
+              </div>
+            )}
+          </div>
         )}
         </div>
       )}
