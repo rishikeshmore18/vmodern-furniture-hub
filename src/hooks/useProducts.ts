@@ -122,15 +122,15 @@ export function useProducts() {
       setIsLoading(true);
       setError(null);
 
-      // Fetch all products with retry
-      const productsResult = await withRetry(async () => {
-        const result = await supabase
-          .from('products')
-          .select('*')
-          .order('created_at', { ascending: false });
-        if (result.error) throw result.error;
-        return result;
-      });
+       // Fetch all products with retry - select only needed fields
+       const productsResult = await withRetry(async () => {
+         const result = await supabase
+           .from('products')
+           .select('id,name,category,product_type,subcategory,description,price_original,discount_percent,price_final,is_new,tags,main_image_url,created_at,updated_at')
+           .order('created_at', { ascending: false });
+         if (result.error) throw result.error;
+         return result;
+       });
 
       if (!productsResult.data || productsResult.data.length === 0) {
         setProducts([]);
@@ -140,12 +140,12 @@ export function useProducts() {
 
       const productIds = productsResult.data.map((p) => p.id);
 
-      // Fetch all related data in parallel with retry
+      // Fetch all related data in parallel with retry - select only needed fields
       const [imagesResult, setItemsResult] = await Promise.all([
         withRetry(async () => {
           const result = await supabase
             .from('product_images')
-            .select('*')
+            .select('id,product_id,image_url,display_order')
             .in('product_id', productIds);
           if (result.error) throw result.error;
           return result;
@@ -153,7 +153,7 @@ export function useProducts() {
         withRetry(async () => {
           const result = await supabase
             .from('set_items')
-            .select('*')
+            .select('id,product_id,name,price,image_url,display_order')
             .in('product_id', productIds);
           if (result.error) throw result.error;
           return result;
@@ -168,7 +168,7 @@ export function useProducts() {
           const result = await withRetry(async () => {
             const res = await supabase
               .from('set_item_images')
-              .select('*')
+              .select('id,set_item_id,image_url,display_order')
               .in('set_item_id', setItemIds);
             if (res.error) throw res.error;
             return res;
@@ -179,27 +179,60 @@ export function useProducts() {
         }
       }
 
-      // Convert to frontend products
-      const imagesData = imagesResult.data || [];
-      const setItemsData = setItemsResult.data || [];
-      const frontendProducts = productsResult.data.map((dbProduct) => {
-        const productImages = imagesData.filter(
-          (img) => img.product_id === dbProduct.id
-        ) as DbProductImage[];
-        const productSetItems = setItemsData.filter(
-          (item) => item.product_id === dbProduct.id
-        ) as DbSetItem[];
-        const productSetItemImages = ((setItemImagesData || []) as DbSetItemImage[]).filter(
-          (img) => productSetItems.some((item) => item.id === img.set_item_id)
-        );
+       // Build maps for O(1) lookups instead of O(n) filters
+       const imagesData = imagesResult.data || [];
+       const setItemsData = setItemsResult.data || [];
+       const setItemImagesDataArray = setItemImagesData || [];
 
-        return dbToProduct(
-          dbProduct as DbProduct,
-          productImages,
-          productSetItems,
-          productSetItemImages
-        );
-      });
+       // Create maps: product_id -> images/setItems, set_item_id -> images
+       const imagesByProductId = new Map<string, DbProductImage[]>();
+       const setItemsByProductId = new Map<string, DbSetItem[]>();
+       const setItemImagesBySetItemId = new Map<string, DbSetItemImage[]>();
+
+       // Build images map
+       for (const img of imagesData) {
+         const existing = imagesByProductId.get(img.product_id) || [];
+         existing.push(img);
+         imagesByProductId.set(img.product_id, existing);
+       }
+
+       // Build set items map
+       for (const item of setItemsData) {
+         const existing = setItemsByProductId.get(item.product_id) || [];
+         existing.push(item);
+         setItemsByProductId.set(item.product_id, existing);
+       }
+
+       // Build set item images map
+       for (const img of setItemImagesDataArray) {
+         const existing = setItemImagesBySetItemId.get(img.set_item_id) || [];
+         existing.push(img);
+         setItemImagesBySetItemId.set(img.set_item_id, existing);
+       }
+
+       // Convert to frontend products using maps (O(n) instead of O(n²))
+       const frontendProducts = productsResult.data.map((dbProduct) => {
+         const productImages = (imagesByProductId.get(dbProduct.id) || []).sort(
+           (a, b) => a.display_order - b.display_order
+         ) as DbProductImage[];
+         const productSetItems = (setItemsByProductId.get(dbProduct.id) || []).sort(
+           (a, b) => a.display_order - b.display_order
+         ) as DbSetItem[];
+         
+         // Get set item images for all set items of this product
+         const productSetItemImages: DbSetItemImage[] = [];
+         for (const item of productSetItems) {
+           const itemImages = setItemImagesBySetItemId.get(item.id) || [];
+           productSetItemImages.push(...itemImages);
+         }
+
+         return dbToProduct(
+           dbProduct as DbProduct,
+           productImages,
+           productSetItems,
+           productSetItemImages
+         );
+       });
 
       setProducts(frontendProducts);
     } catch (err) {
@@ -522,47 +555,47 @@ export function useProducts() {
         return cachedProduct;
       }
 
-      // Fetch from database with parallel queries and retry
-      const [productResult, imagesResult, setItemsResult] = await Promise.all([
-        withRetry(async () => {
-          const result = await supabase
-            .from('products')
-            .select('*')
-            .eq('id', id)
-            .maybeSingle();
-          if (result.error) throw result.error;
-          return result;
-        }),
-        withRetry(async () => {
-          const result = await supabase
-            .from('product_images')
-            .select('*')
-            .eq('product_id', id);
-          if (result.error) throw result.error;
-          return result;
-        }),
-        withRetry(async () => {
-          const result = await supabase
-            .from('set_items')
-            .select('*')
-            .eq('product_id', id);
-          if (result.error) throw result.error;
-          return result;
-        }),
-      ]);
+       // Fetch from database with parallel queries and retry - select only needed fields
+       const [productResult, imagesResult, setItemsResult] = await Promise.all([
+         withRetry(async () => {
+           const result = await supabase
+             .from('products')
+             .select('id,name,category,product_type,subcategory,description,price_original,discount_percent,price_final,is_new,tags,main_image_url,created_at,updated_at')
+             .eq('id', id)
+             .maybeSingle();
+           if (result.error) throw result.error;
+           return result;
+         }),
+         withRetry(async () => {
+           const result = await supabase
+             .from('product_images')
+             .select('id,product_id,image_url,display_order')
+             .eq('product_id', id);
+           if (result.error) throw result.error;
+           return result;
+         }),
+         withRetry(async () => {
+           const result = await supabase
+             .from('set_items')
+             .select('id,product_id,name,price,image_url,display_order')
+             .eq('product_id', id);
+           if (result.error) throw result.error;
+           return result;
+         }),
+       ]);
 
-      if (!productResult.data) return null;
+       if (!productResult.data) return null;
 
-      // Fetch set item images if we have set items
-      const setItemIds = (setItemsResult.data || []).map((item) => item.id);
-      let setItemImagesData: DbSetItemImage[] | null = null;
-      if (setItemIds.length > 0) {
-        try {
-          const result = await withRetry(async () => {
-            const res = await supabase
-              .from('set_item_images')
-              .select('*')
-              .in('set_item_id', setItemIds);
+       // Fetch set item images if we have set items
+       const setItemIds = (setItemsResult.data || []).map((item) => item.id);
+       let setItemImagesData: DbSetItemImage[] | null = null;
+       if (setItemIds.length > 0) {
+         try {
+           const result = await withRetry(async () => {
+             const res = await supabase
+               .from('set_item_images')
+               .select('id,set_item_id,image_url,display_order')
+               .in('set_item_id', setItemIds);
             if (res.error) throw res.error;
             return res;
           });
@@ -603,6 +636,98 @@ let publicProductsCache: {
 } | null = null;
 const CACHE_DURATION = 60000; // 1 minute cache
 
+// Lightweight hook for homepage - only fetches featured items (6 max)
+export function useFeaturedProducts() {
+  const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchFeatured = async () => {
+      try {
+        setIsLoading(true);
+        
+        // Only fetch products with tags (new, sale, staff_pick) and limit to 6
+        // Select only essential fields to reduce payload
+        const { data: productsData, error: productsError } = await supabase
+          .from('products')
+          .select('id,name,category,product_type,subcategory,description,price_original,discount_percent,price_final,is_new,tags,main_image_url,created_at,updated_at')
+          .or('tags.cs.{new},tags.cs.{sale},tags.cs.{staff_pick}')
+          .order('created_at', { ascending: false })
+          .limit(6);
+
+        if (productsError) throw productsError;
+
+        if (!productsData || productsData.length === 0) {
+          setFeaturedProducts([]);
+          setIsLoading(false);
+          return;
+        }
+
+        const productIds = productsData.map((p) => p.id);
+
+        // Fetch only main images (first image per product) to reduce payload
+        const { data: imagesData } = await supabase
+          .from('product_images')
+          .select('product_id,image_url,display_order')
+          .in('product_id', productIds)
+          .eq('display_order', 0); // Only first image
+
+        // Build simple map for images
+        const imagesByProductId = new Map<string, string>();
+        (imagesData || []).forEach((img) => {
+          if (!imagesByProductId.has(img.product_id)) {
+            imagesByProductId.set(img.product_id, img.image_url);
+          }
+        });
+
+        // Convert to frontend products (simplified - no set items for homepage)
+        const products = productsData.map((dbProduct) => {
+          const mainImage = imagesByProductId.get(dbProduct.id) || dbProduct.main_image_url;
+          
+          return {
+            id: dbProduct.id,
+            name: dbProduct.name,
+            category: dbProduct.category,
+            productType: dbProduct.product_type || undefined,
+            subcategory: dbProduct.subcategory || undefined,
+            description: dbProduct.description,
+            priceOriginal: dbProduct.price_original,
+            discountPercent: dbProduct.discount_percent,
+            priceFinal: dbProduct.price_final,
+            isNew: dbProduct.is_new,
+            tags: dbProduct.tags || [],
+            mainImageUrl: mainImage,
+            imageUrls: mainImage ? [mainImage] : undefined,
+            createdAt: dbProduct.created_at,
+            updatedAt: dbProduct.updated_at,
+          } as Product;
+        });
+
+        setFeaturedProducts(products);
+      } catch (err) {
+        console.error('Error fetching featured products:', err);
+        setFeaturedProducts([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchFeatured();
+  }, []);
+
+  // Helper functions for tagged products (using the 6 featured items)
+  const getTaggedProducts = (tag: 'new' | 'sale' | 'staff_pick') =>
+    featuredProducts.filter((p) => p.tags.includes(tag));
+
+  return {
+    featuredProducts: featuredProducts.slice(0, 6),
+    newArrivals: getTaggedProducts('new'),
+    onSale: getTaggedProducts('sale'),
+    staffPicks: getTaggedProducts('staff_pick'),
+    isLoading,
+  };
+}
+
 // Hook for public product display (read-only) with caching
 export function usePublicProducts() {
   const [products, setProducts] = useState<Product[]>(() => {
@@ -632,14 +757,14 @@ export function usePublicProducts() {
       try {
         setIsLoading(true);
 
-        const productsResult = await withRetry(async () => {
-          const result = await supabase
-            .from('products')
-            .select('*')
-            .order('created_at', { ascending: false });
-          if (result.error) throw result.error;
-          return result;
-        });
+         const productsResult = await withRetry(async () => {
+           const result = await supabase
+             .from('products')
+             .select('id,name,category,product_type,subcategory,description,price_original,discount_percent,price_final,is_new,tags,main_image_url,created_at,updated_at')
+             .order('created_at', { ascending: false });
+           if (result.error) throw result.error;
+           return result;
+         });
 
         if (!productsResult.data || productsResult.data.length === 0) {
           setProducts([]);
@@ -651,12 +776,12 @@ export function usePublicProducts() {
 
         const productIds = productsResult.data.map((p) => p.id);
 
-        // Fetch all related data in parallel with retry
+        // Fetch all related data in parallel with retry - select only needed fields
         const [imagesResult, setItemsResult] = await Promise.all([
           withRetry(async () => {
             const result = await supabase
               .from('product_images')
-              .select('*')
+              .select('id,product_id,image_url,display_order')
               .in('product_id', productIds);
             if (result.error) throw result.error;
             return result;
@@ -664,7 +789,7 @@ export function usePublicProducts() {
           withRetry(async () => {
             const result = await supabase
               .from('set_items')
-              .select('*')
+              .select('id,product_id,name,price,image_url,display_order')
               .in('product_id', productIds);
             if (result.error) throw result.error;
             return result;
@@ -679,7 +804,7 @@ export function usePublicProducts() {
             const result = await withRetry(async () => {
               const res = await supabase
                 .from('set_item_images')
-                .select('*')
+                .select('id,set_item_id,image_url,display_order')
                 .in('set_item_id', setItemIds);
               if (res.error) throw res.error;
               return res;
@@ -690,26 +815,60 @@ export function usePublicProducts() {
           }
         }
 
-        const imagesData = imagesResult.data || [];
-        const setItemsData = setItemsResult.data || [];
-        const frontendProducts = productsResult.data.map((dbProduct) => {
-          const productImages = imagesData.filter(
-            (img) => img.product_id === dbProduct.id
-          ) as DbProductImage[];
-          const productSetItems = setItemsData.filter(
-            (item) => item.product_id === dbProduct.id
-          ) as DbSetItem[];
-          const productSetItemImages = (
-            (setItemImagesData || []) as DbSetItemImage[]
-          ).filter((img) => productSetItems.some((item) => item.id === img.set_item_id));
+         // Build maps for O(1) lookups instead of O(n) filters
+         const imagesData = imagesResult.data || [];
+         const setItemsData = setItemsResult.data || [];
+         const setItemImagesDataArray = setItemImagesData || [];
 
-          return dbToProduct(
-            dbProduct as DbProduct,
-            productImages,
-            productSetItems,
-            productSetItemImages
-          );
-        });
+         // Create maps: product_id -> images/setItems, set_item_id -> images
+         const imagesByProductId = new Map<string, DbProductImage[]>();
+         const setItemsByProductId = new Map<string, DbSetItem[]>();
+         const setItemImagesBySetItemId = new Map<string, DbSetItemImage[]>();
+
+         // Build images map
+         for (const img of imagesData) {
+           const existing = imagesByProductId.get(img.product_id) || [];
+           existing.push(img);
+           imagesByProductId.set(img.product_id, existing);
+         }
+
+         // Build set items map
+         for (const item of setItemsData) {
+           const existing = setItemsByProductId.get(item.product_id) || [];
+           existing.push(item);
+           setItemsByProductId.set(item.product_id, existing);
+         }
+
+         // Build set item images map
+         for (const img of setItemImagesDataArray) {
+           const existing = setItemImagesBySetItemId.get(img.set_item_id) || [];
+           existing.push(img);
+           setItemImagesBySetItemId.set(img.set_item_id, existing);
+         }
+
+         // Convert to frontend products using maps (O(n) instead of O(n²))
+         const frontendProducts = productsResult.data.map((dbProduct) => {
+           const productImages = (imagesByProductId.get(dbProduct.id) || []).sort(
+             (a, b) => a.display_order - b.display_order
+           ) as DbProductImage[];
+           const productSetItems = (setItemsByProductId.get(dbProduct.id) || []).sort(
+             (a, b) => a.display_order - b.display_order
+           ) as DbSetItem[];
+           
+           // Get set item images for all set items of this product
+           const productSetItemImages: DbSetItemImage[] = [];
+           for (const item of productSetItems) {
+             const itemImages = setItemImagesBySetItemId.get(item.id) || [];
+             productSetItemImages.push(...itemImages);
+           }
+
+           return dbToProduct(
+             dbProduct as DbProduct,
+             productImages,
+             productSetItems,
+             productSetItemImages
+           );
+         });
 
         // Update cache
         publicProductsCache = { products: frontendProducts, timestamp: Date.now() };
@@ -746,5 +905,106 @@ export function usePublicProducts() {
     featuredProducts,
     getTaggedProducts,
     isLoading,
+  };
+}
+
+// Hook for paginated floor samples (server-side filtering)
+export function usePaginatedFloorSamples(page: number = 1, pageSize: number = 12) {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [totalCount, setTotalCount] = useState(0);
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        setIsLoading(true);
+        
+        // Get total count first
+        const { count } = await supabase
+          .from('products')
+          .select('*', { count: 'exact', head: true })
+          .eq('category', 'floor_sample');
+        
+        setTotalCount(count || 0);
+
+        // Fetch paginated products - select only needed fields
+        const from = (page - 1) * pageSize;
+        const to = from + pageSize - 1;
+
+        const { data: productsData, error: productsError } = await supabase
+          .from('products')
+          .select('id,name,category,product_type,subcategory,description,price_original,discount_percent,price_final,is_new,tags,main_image_url,created_at,updated_at')
+          .eq('category', 'floor_sample')
+          .order('created_at', { ascending: false })
+          .range(from, to);
+
+        if (productsError) throw productsError;
+
+        if (!productsData || productsData.length === 0) {
+          setProducts([]);
+          setIsLoading(false);
+          return;
+        }
+
+        const productIds = productsData.map((p) => p.id);
+
+        // Fetch only main images for list view
+        const { data: imagesData } = await supabase
+          .from('product_images')
+          .select('product_id,image_url,display_order')
+          .in('product_id', productIds)
+          .eq('display_order', 0);
+
+        // Build images map
+        const imagesByProductId = new Map<string, string>();
+        (imagesData || []).forEach((img) => {
+          if (!imagesByProductId.has(img.product_id)) {
+            imagesByProductId.set(img.product_id, img.image_url);
+          }
+        });
+
+        // Convert to frontend products (simplified for list view)
+        const frontendProducts = productsData.map((dbProduct) => {
+          const mainImage = imagesByProductId.get(dbProduct.id) || dbProduct.main_image_url;
+          
+          return {
+            id: dbProduct.id,
+            name: dbProduct.name,
+            category: dbProduct.category,
+            productType: dbProduct.product_type || undefined,
+            subcategory: dbProduct.subcategory || undefined,
+            description: dbProduct.description,
+            priceOriginal: dbProduct.price_original,
+            discountPercent: dbProduct.discount_percent,
+            priceFinal: dbProduct.price_final,
+            isNew: dbProduct.is_new,
+            tags: dbProduct.tags || [],
+            mainImageUrl: mainImage,
+            imageUrls: mainImage ? [mainImage] : undefined,
+            createdAt: dbProduct.created_at,
+            updatedAt: dbProduct.updated_at,
+          } as Product;
+        });
+
+        setProducts(frontendProducts);
+      } catch (err) {
+        console.error('Error fetching paginated floor samples:', err);
+        setProducts([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchProducts();
+  }, [page, pageSize]);
+
+  const totalPages = Math.ceil(totalCount / pageSize);
+
+  return {
+    products,
+    isLoading,
+    totalCount,
+    totalPages,
+    hasMore: page < totalPages,
   };
 }

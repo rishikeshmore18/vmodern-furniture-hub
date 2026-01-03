@@ -4,14 +4,11 @@ import { Layout } from '@/components/layout/Layout';
 import { ProductGrid } from '@/components/products/ProductGrid';
 import { Button } from '@/components/ui/button';
 import { storeInfo } from '@/data/storeInfo';
-import { usePublicProducts } from '@/hooks/useProducts';
+import { useFeaturedProducts } from '@/hooks/useProducts';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const Index = () => {
-  const { featuredProducts, getTaggedProducts, isLoading } = usePublicProducts();
-  const newArrivals = getTaggedProducts('new');
-  const onSale = getTaggedProducts('sale');
-  const staffPicks = getTaggedProducts('staff_pick');
+  const { featuredProducts, newArrivals, onSale, staffPicks, isLoading } = useFeaturedProducts();
 
   return (
     <Layout>
