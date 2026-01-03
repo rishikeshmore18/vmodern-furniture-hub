@@ -1044,6 +1044,42 @@ const floorSamplesPageCache = new Map<
   string,
   { products: Product[]; totalCount: number; timestamp: number }
 >();
+const FLOOR_SAMPLES_COUNT_CACHE_DURATION = 5 * 60 * 1000;
+let floorSamplesCountCache: { count: number; timestamp: number } | null = null;
+
+function getCachedFloorSamplesCount() {
+  if (!floorSamplesCountCache) return null;
+  if (Date.now() - floorSamplesCountCache.timestamp > FLOOR_SAMPLES_COUNT_CACHE_DURATION) {
+    floorSamplesCountCache = null;
+    return null;
+  }
+  return floorSamplesCountCache.count;
+}
+
+function setCachedFloorSamplesCount(count: number) {
+  floorSamplesCountCache = { count, timestamp: Date.now() };
+  for (const [key, cached] of floorSamplesPageCache.entries()) {
+    floorSamplesPageCache.set(key, { ...cached, totalCount: count });
+  }
+}
+
+async function fetchFloorSamplesCount() {
+  const cached = getCachedFloorSamplesCount();
+  if (cached !== null) return cached;
+
+  const result = await withRetry(async () => {
+    const res = await supabase
+      .from('products')
+      .select('*', { count: 'exact', head: true })
+      .eq('category', 'floor_sample');
+    if (res.error) throw res.error;
+    return res;
+  });
+
+  const totalCount = result.count || 0;
+  setCachedFloorSamplesCount(totalCount);
+  return totalCount;
+}
 
 function getFloorSamplesCacheKey(page: number, pageSize: number) {
   return `${page}:${pageSize}`;
@@ -1075,22 +1111,20 @@ function setCachedFloorSamplesPage(
 }
 
 async function fetchFloorSamplesPage(page: number, pageSize: number) {
-  // Fetch paginated products with count in a single request
+  // Fetch paginated products only; count is fetched separately to avoid blocking
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  const { data: productsData, error: productsError, count } = await supabase
+  const { data: productsData, error: productsError } = await supabase
     .from('products')
-    .select('id,name,category,product_type,subcategory,description,price_original,discount_percent,price_final,is_new,tags,main_image_url,created_at,updated_at', {
-      count: 'exact',
-    })
+    .select('id,name,category,product_type,subcategory,description,price_original,discount_percent,price_final,is_new,tags,main_image_url,created_at,updated_at')
     .eq('category', 'floor_sample')
     .order('created_at', { ascending: false })
     .range(from, to);
 
   if (productsError) throw productsError;
 
-  const totalCount = count || 0;
+  const totalCount = getCachedFloorSamplesCount() || 0;
 
   if (!productsData || productsData.length === 0) {
     return { products: [] as Product[], totalCount };
@@ -1173,13 +1207,38 @@ export function usePaginatedFloorSamples(page: number = 1, pageSize: number = 12
     };
   }, [page, pageSize]);
 
-  const totalPages = Math.ceil(totalCount / pageSize);
+  useEffect(() => {
+    let isActive = true;
+    const cachedCount = getCachedFloorSamplesCount();
+    if (cachedCount !== null) {
+      setTotalCount(cachedCount);
+      return () => {
+        isActive = false;
+      };
+    }
+
+    fetchFloorSamplesCount()
+      .then((count) => {
+        if (!isActive) return;
+        setTotalCount(count);
+      })
+      .catch((err) => {
+        if (!isActive) return;
+        console.error('Error fetching floor sample count:', err);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  const totalPages = totalCount > 0 ? Math.ceil(totalCount / pageSize) : 0;
 
   return {
     products,
     isLoading,
     totalCount,
     totalPages,
-    hasMore: page < totalPages,
+    hasMore: totalCount > 0 ? page < totalPages : products.length === pageSize,
   };
 }
