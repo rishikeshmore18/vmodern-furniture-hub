@@ -110,14 +110,14 @@ export function CategorySelector({
         ) : (
           <div className="mt-2 space-y-3">
             <RadioGroup
-              value={category}
+              value={category || undefined}
               onValueChange={handleCategorySelect}
-              className="grid gap-2"
+              className="flex flex-wrap gap-4"
             >
               {categories.map((cat) => {
                 const id = `category-${normalizeKey(cat.name)}`;
                 return (
-                  <div key={cat.name} className="flex items-center space-x-2">
+                  <div key={cat.name} className="inline-flex items-center space-x-2">
                     <RadioGroupItem value={cat.name} id={id} />
                     <Label htmlFor={id} className="font-normal cursor-pointer">
                       {cat.name}
@@ -165,14 +165,14 @@ export function CategorySelector({
         ) : (
           <div className="mt-2 space-y-3">
             <RadioGroup
-              value={subcategory}
+              value={subcategory || undefined}
               onValueChange={handleSubcategorySelect}
-              className="grid gap-2"
+              className="flex flex-wrap gap-4"
             >
               {subcategories.map((sub) => {
                 const id = `subcategory-${normalizeKey(sub)}`;
                 return (
-                  <div key={sub} className="flex items-center space-x-2">
+                  <div key={sub} className="inline-flex items-center space-x-2">
                     <RadioGroupItem value={sub} id={id} />
                     <Label htmlFor={id} className="font-normal cursor-pointer">
                       {sub}

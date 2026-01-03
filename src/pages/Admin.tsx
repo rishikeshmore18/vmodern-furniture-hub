@@ -527,8 +527,12 @@ const Admin = () => {
                         <CategorySelector
                           category={formData.productType}
                           subcategory={formData.subcategory}
-                          onCategoryChange={(v) => setFormData({ ...formData, productType: v })}
-                          onSubcategoryChange={(v) => setFormData({ ...formData, subcategory: v })}
+                          onCategoryChange={(v) =>
+                            setFormData((prev) => ({ ...prev, productType: v }))
+                          }
+                          onSubcategoryChange={(v) =>
+                            setFormData((prev) => ({ ...prev, subcategory: v }))
+                          }
                         />
 
                         <div>
