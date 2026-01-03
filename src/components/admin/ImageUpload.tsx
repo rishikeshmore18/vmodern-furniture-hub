@@ -10,6 +10,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { optimizeAndUploadDataUrl, optimizeAndUploadImageFile } from '@/lib/image-upload';
 
 interface ImageUploadProps {
   value: string;
@@ -21,27 +22,40 @@ export function ImageUpload({ value, onChange, label = 'Image' }: ImageUploadPro
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [urlInput, setUrlInput] = useState(value);
   const [activeTab, setActiveTab] = useState<'url' | 'upload' | 'camera'>('url');
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Convert to base64 data URL for storage
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result as string;
+      setIsUploading(true);
+      try {
+        const result = await optimizeAndUploadImageFile(file);
         onChange(result);
         setIsDialogOpen(false);
-      };
-      reader.readAsDataURL(file);
+      } finally {
+        setIsUploading(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
     }
   };
 
-  const handleUrlSubmit = () => {
+  const handleUrlSubmit = async () => {
     if (urlInput.trim()) {
-      onChange(urlInput.trim());
-      setIsDialogOpen(false);
+      setIsUploading(true);
+      try {
+        const trimmed = urlInput.trim();
+        const result = trimmed.startsWith('data:image/')
+          ? await optimizeAndUploadDataUrl(trimmed)
+          : trimmed;
+        onChange(result);
+        setIsDialogOpen(false);
+      } finally {
+        setIsUploading(false);
+      }
     }
   };
 
@@ -79,8 +93,8 @@ export function ImageUpload({ value, onChange, label = 'Image' }: ImageUploadPro
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogTrigger asChild>
-          <Button type="button" variant="outline" size="sm">
-            {value ? 'Change Image' : 'Add Image'}
+          <Button type="button" variant="outline" size="sm" disabled={isUploading}>
+            {isUploading ? 'Uploading...' : value ? 'Change Image' : 'Add Image'}
           </Button>
         </DialogTrigger>
         <DialogContent className="sm:max-w-md">
@@ -130,8 +144,8 @@ export function ImageUpload({ value, onChange, label = 'Image' }: ImageUploadPro
                   onChange={(e) => setUrlInput(e.target.value)}
                 />
               </div>
-              <Button type="button" onClick={handleUrlSubmit} className="w-full">
-                Use This URL
+              <Button type="button" onClick={handleUrlSubmit} className="w-full" disabled={isUploading}>
+                {isUploading ? 'Uploading...' : 'Use This URL'}
               </Button>
             </div>
           )}
@@ -151,6 +165,7 @@ export function ImageUpload({ value, onChange, label = 'Image' }: ImageUploadPro
                 variant="outline"
                 className="w-full h-24 border-dashed"
                 onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
               >
                 <div className="flex flex-col items-center gap-2">
                   <Upload className="h-8 w-8 text-muted-foreground" />
@@ -176,6 +191,7 @@ export function ImageUpload({ value, onChange, label = 'Image' }: ImageUploadPro
                 variant="outline"
                 className="w-full h-24 border-dashed"
                 onClick={() => cameraInputRef.current?.click()}
+                disabled={isUploading}
               >
                 <div className="flex flex-col items-center gap-2">
                   <Camera className="h-8 w-8 text-muted-foreground" />

@@ -10,6 +10,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { optimizeAndUploadDataUrl, optimizeAndUploadImageFile } from '@/lib/image-upload';
 
 interface MultipleImageUploadProps {
   value: string[];
@@ -22,40 +23,43 @@ export function MultipleImageUpload({ value, onChange, label = 'Product Images',
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [urlInput, setUrlInput] = useState('');
   const [activeTab, setActiveTab] = useState<'url' | 'upload' | 'camera'>('url');
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length > 0) {
-      const newUrls: string[] = [];
-      let processed = 0;
-
-      files.forEach((file) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const result = reader.result as string;
-          newUrls.push(result);
-          processed++;
-          
-          if (processed === files.length) {
-            onChange([...value, ...newUrls]);
-            setIsDialogOpen(false);
-            if (fileInputRef.current) {
-              fileInputRef.current.value = '';
-            }
-          }
-        };
-        reader.readAsDataURL(file);
-      });
+      setIsUploading(true);
+      try {
+        const newUrls = await Promise.all(
+          files.map((file) => optimizeAndUploadImageFile(file))
+        );
+        onChange([...value, ...newUrls]);
+        setIsDialogOpen(false);
+      } finally {
+        setIsUploading(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
     }
   };
 
-  const handleUrlSubmit = () => {
+  const handleUrlSubmit = async () => {
     if (urlInput.trim()) {
-      onChange([...value, urlInput.trim()]);
-      setUrlInput('');
-      setIsDialogOpen(false);
+      setIsUploading(true);
+      try {
+        const trimmed = urlInput.trim();
+        const result = trimmed.startsWith('data:image/')
+          ? await optimizeAndUploadDataUrl(trimmed)
+          : trimmed;
+        onChange([...value, result]);
+        setUrlInput('');
+        setIsDialogOpen(false);
+      } finally {
+        setIsUploading(false);
+      }
     }
   };
 
@@ -63,19 +67,20 @@ export function MultipleImageUpload({ value, onChange, label = 'Product Images',
     onChange(value.filter((_, i) => i !== index));
   };
 
-  const handleCameraCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCameraCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result as string;
+      setIsUploading(true);
+      try {
+        const result = await optimizeAndUploadImageFile(file);
         onChange([...value, result]);
         setIsDialogOpen(false);
+      } finally {
+        setIsUploading(false);
         if (cameraInputRef.current) {
           cameraInputRef.current.value = '';
         }
-      };
-      reader.readAsDataURL(file);
+      }
     }
   };
 
@@ -119,9 +124,9 @@ export function MultipleImageUpload({ value, onChange, label = 'Product Images',
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogTrigger asChild>
-          <Button type="button" variant="outline" size="sm">
+          <Button type="button" variant="outline" size="sm" disabled={isUploading}>
             <Upload className="mr-2 h-4 w-4" />
-            {value.length > 0 ? 'Add More Images' : 'Add Images'}
+            {isUploading ? 'Uploading...' : value.length > 0 ? 'Add More Images' : 'Add Images'}
           </Button>
         </DialogTrigger>
         <DialogContent className="sm:max-w-md">
@@ -173,21 +178,22 @@ export function MultipleImageUpload({ value, onChange, label = 'Product Images',
                 />
               </div>
               <div className="flex gap-2">
-                <Button type="button" onClick={handleUrlSubmit} className="flex-1">
-                  Add URL
-                </Button>
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={() => {
-                    setUrlInput('');
-                    setIsDialogOpen(false);
-                  }}
-                >
-                  Done
-                </Button>
-              </div>
+              <Button type="button" onClick={handleUrlSubmit} className="flex-1" disabled={isUploading}>
+                {isUploading ? 'Uploading...' : 'Add URL'}
+              </Button>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => {
+                  setUrlInput('');
+                  setIsDialogOpen(false);
+                }}
+                disabled={isUploading}
+              >
+                Done
+              </Button>
             </div>
+          </div>
           )}
 
           {/* Upload tab */}
@@ -206,6 +212,7 @@ export function MultipleImageUpload({ value, onChange, label = 'Product Images',
                 variant="outline"
                 className="w-full h-24 border-dashed"
                 onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
               >
                 <div className="flex flex-col items-center gap-2">
                   <Upload className="h-8 w-8 text-muted-foreground" />
@@ -232,6 +239,7 @@ export function MultipleImageUpload({ value, onChange, label = 'Product Images',
                 variant="outline"
                 className="w-full h-24 border-dashed"
                 onClick={() => cameraInputRef.current?.click()}
+                disabled={isUploading}
               >
                 <div className="flex flex-col items-center gap-2">
                   <Camera className="h-8 w-8 text-muted-foreground" />
@@ -254,4 +262,3 @@ export function MultipleImageUpload({ value, onChange, label = 'Product Images',
     </div>
   );
 }
-
