@@ -125,11 +125,7 @@ export function CategorySelector({
         ) : (
           <Select value={category || ''} onValueChange={handleCategorySelect}>
             <SelectTrigger className="mt-1">
-              {displayCategory ? (
-                <SelectValue>{displayCategory}</SelectValue>
-              ) : (
-                <SelectValue placeholder="Select category" />
-              )}
+              <SelectValue placeholder="Select category" />
             </SelectTrigger>
             <SelectContent>
               {needsHiddenCategoryItem && (
@@ -179,11 +175,7 @@ export function CategorySelector({
         ) : (
           <Select value={subcategory || ''} onValueChange={handleSubcategorySelect}>
             <SelectTrigger className="mt-1">
-              {displaySubcategory ? (
-                <SelectValue>{displaySubcategory}</SelectValue>
-              ) : (
-                <SelectValue placeholder="Select subcategory" />
-              )}
+              <SelectValue placeholder="Select subcategory" />
             </SelectTrigger>
             <SelectContent>
               {needsHiddenSubcategoryItem && (
@@ -197,14 +189,14 @@ export function CategorySelector({
                 </SelectItem>
               ))}
               <SelectItem value="__custom__">
-                  <span className="flex items-center gap-2 text-primary">
-                    <Plus className="h-4 w-4" />
-                    Add Custom...
-                  </span>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          )}
+                <span className="flex items-center gap-2 text-primary">
+                  <Plus className="h-4 w-4" />
+                  Add Custom...
+                </span>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        )}
         </div>
       )}
     </div>
