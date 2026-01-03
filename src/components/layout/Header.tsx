@@ -4,6 +4,7 @@ import { Menu, X, Phone, MapPin, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { storeInfo } from '@/data/storeInfo';
 import { cn } from '@/lib/utils';
+import { prefetchFloorSamplesPage } from '@/hooks/useProducts';
 
 // Public navigation only - no Invoice or Admin
 const navLinks = [
@@ -15,6 +16,7 @@ const navLinks = [
 export function Header() {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
+  const prefetchFloorSamples = () => prefetchFloorSamplesPage(1, 12);
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
@@ -54,6 +56,8 @@ export function Header() {
             <Link
               key={link.href}
               to={link.href}
+              onMouseEnter={link.href === '/floor-samples' ? prefetchFloorSamples : undefined}
+              onFocus={link.href === '/floor-samples' ? prefetchFloorSamples : undefined}
               className={cn(
                 'px-4 py-2 text-sm font-medium transition-colors hover:text-foreground',
                 location.pathname === link.href
@@ -87,6 +91,7 @@ export function Header() {
                   key={link.href}
                   to={link.href}
                   onClick={() => setIsOpen(false)}
+                  onTouchStart={link.href === '/floor-samples' ? prefetchFloorSamples : undefined}
                   className={cn(
                     'rounded-md px-4 py-3 text-sm font-medium transition-colors',
                     location.pathname === link.href

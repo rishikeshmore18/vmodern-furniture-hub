@@ -1046,9 +1046,81 @@ const floorSamplesPageCache = new Map<
 >();
 const FLOOR_SAMPLES_COUNT_CACHE_DURATION = 5 * 60 * 1000;
 let floorSamplesCountCache: { count: number; timestamp: number } | null = null;
+const FLOOR_SAMPLES_PAGE_STORAGE_PREFIX = 'vmodern_floor_samples_page_v1:';
+const FLOOR_SAMPLES_COUNT_STORAGE_KEY = 'vmodern_floor_samples_count_v1';
+
+function getStoredFloorSamplesPage(page: number, pageSize: number) {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(`${FLOOR_SAMPLES_PAGE_STORAGE_PREFIX}${page}:${pageSize}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { products: Product[]; totalCount: number; timestamp: number };
+    if (!parsed || !Array.isArray(parsed.products)) return null;
+    if (Date.now() - parsed.timestamp > FLOOR_SAMPLES_CACHE_DURATION) {
+      localStorage.removeItem(`${FLOOR_SAMPLES_PAGE_STORAGE_PREFIX}${page}:${pageSize}`);
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function setStoredFloorSamplesPage(
+  page: number,
+  pageSize: number,
+  products: Product[],
+  totalCount: number
+) {
+  if (typeof window === 'undefined') return;
+  try {
+    const payload = JSON.stringify({
+      products,
+      totalCount,
+      timestamp: Date.now(),
+    });
+    localStorage.setItem(`${FLOOR_SAMPLES_PAGE_STORAGE_PREFIX}${page}:${pageSize}`, payload);
+  } catch {
+    // Ignore storage write errors
+  }
+}
+
+function getStoredFloorSamplesCount() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(FLOOR_SAMPLES_COUNT_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { count: number; timestamp: number };
+    if (typeof parsed?.count !== 'number') return null;
+    if (Date.now() - parsed.timestamp > FLOOR_SAMPLES_COUNT_CACHE_DURATION) {
+      localStorage.removeItem(FLOOR_SAMPLES_COUNT_STORAGE_KEY);
+      return null;
+    }
+    return parsed.count;
+  } catch {
+    return null;
+  }
+}
+
+function setStoredFloorSamplesCount(count: number) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(
+      FLOOR_SAMPLES_COUNT_STORAGE_KEY,
+      JSON.stringify({ count, timestamp: Date.now() })
+    );
+  } catch {
+    // Ignore storage write errors
+  }
+}
 
 function getCachedFloorSamplesCount() {
-  if (!floorSamplesCountCache) return null;
+  if (!floorSamplesCountCache) {
+    const stored = getStoredFloorSamplesCount();
+    if (stored === null) return null;
+    floorSamplesCountCache = { count: stored, timestamp: Date.now() };
+    return stored;
+  }
   if (Date.now() - floorSamplesCountCache.timestamp > FLOOR_SAMPLES_COUNT_CACHE_DURATION) {
     floorSamplesCountCache = null;
     return null;
@@ -1058,6 +1130,7 @@ function getCachedFloorSamplesCount() {
 
 function setCachedFloorSamplesCount(count: number) {
   floorSamplesCountCache = { count, timestamp: Date.now() };
+  setStoredFloorSamplesCount(count);
   for (const [key, cached] of floorSamplesPageCache.entries()) {
     floorSamplesPageCache.set(key, { ...cached, totalCount: count });
   }
@@ -1088,7 +1161,16 @@ function getFloorSamplesCacheKey(page: number, pageSize: number) {
 function getCachedFloorSamplesPage(page: number, pageSize: number) {
   const key = getFloorSamplesCacheKey(page, pageSize);
   const cached = floorSamplesPageCache.get(key);
-  if (!cached) return null;
+  if (!cached) {
+    const stored = getStoredFloorSamplesPage(page, pageSize);
+    if (!stored) return null;
+    floorSamplesPageCache.set(key, {
+      products: stored.products,
+      totalCount: stored.totalCount,
+      timestamp: stored.timestamp,
+    });
+    return stored;
+  }
   if (Date.now() - cached.timestamp > FLOOR_SAMPLES_CACHE_DURATION) {
     floorSamplesPageCache.delete(key);
     return null;
@@ -1108,6 +1190,7 @@ function setCachedFloorSamplesPage(
     totalCount,
     timestamp: Date.now(),
   });
+  setStoredFloorSamplesPage(page, pageSize, products, totalCount);
 }
 
 async function fetchFloorSamplesPage(page: number, pageSize: number) {
