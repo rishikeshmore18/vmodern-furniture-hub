@@ -1075,52 +1075,29 @@ function setCachedFloorSamplesPage(
 }
 
 async function fetchFloorSamplesPage(page: number, pageSize: number) {
-  // Get total count first
-  const { count } = await supabase
-    .from('products')
-    .select('*', { count: 'exact', head: true })
-    .eq('category', 'floor_sample');
-
-  const totalCount = count || 0;
-
-  // Fetch paginated products - select only needed fields
+  // Fetch paginated products with count in a single request
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  const { data: productsData, error: productsError } = await supabase
+  const { data: productsData, error: productsError, count } = await supabase
     .from('products')
-    .select('id,name,category,product_type,subcategory,description,price_original,discount_percent,price_final,is_new,tags,main_image_url,created_at,updated_at')
+    .select('id,name,category,product_type,subcategory,description,price_original,discount_percent,price_final,is_new,tags,main_image_url,created_at,updated_at', {
+      count: 'exact',
+    })
     .eq('category', 'floor_sample')
     .order('created_at', { ascending: false })
     .range(from, to);
 
   if (productsError) throw productsError;
 
+  const totalCount = count || 0;
+
   if (!productsData || productsData.length === 0) {
     return { products: [] as Product[], totalCount };
   }
 
-  const productIds = productsData.map((p) => p.id);
-
-  // Fetch only main images for list view
-  const { data: imagesData } = await supabase
-    .from('product_images')
-    .select('product_id,image_url,display_order')
-    .in('product_id', productIds)
-    .eq('display_order', 0);
-
-  // Build images map
-  const imagesByProductId = new Map<string, string>();
-  (imagesData || []).forEach((img) => {
-    if (!imagesByProductId.has(img.product_id)) {
-      imagesByProductId.set(img.product_id, img.image_url);
-    }
-  });
-
   // Convert to frontend products (simplified for list view)
   const frontendProducts = productsData.map((dbProduct) => {
-    const mainImage = imagesByProductId.get(dbProduct.id) || dbProduct.main_image_url;
-
     return {
       id: dbProduct.id,
       name: dbProduct.name,
@@ -1133,8 +1110,8 @@ async function fetchFloorSamplesPage(page: number, pageSize: number) {
       priceFinal: dbProduct.price_final,
       isNew: dbProduct.is_new,
       tags: dbProduct.tags || [],
-      mainImageUrl: mainImage,
-      imageUrls: mainImage ? [mainImage] : undefined,
+      mainImageUrl: dbProduct.main_image_url,
+      imageUrls: dbProduct.main_image_url ? [dbProduct.main_image_url] : undefined,
       createdAt: dbProduct.created_at,
       updatedAt: dbProduct.updated_at,
     } as Product;
