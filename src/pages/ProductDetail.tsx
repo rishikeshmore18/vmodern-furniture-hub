@@ -1,5 +1,5 @@
 import { useParams, Link } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { ArrowLeft, Phone, MapPin, Clock, Tag, Loader2 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
@@ -11,27 +11,44 @@ import { ProductGallery } from '@/components/products/ProductGallery';
 
 const ProductDetail = () => {
   const { id } = useParams<{ id: string }>();
-  const { products, getProductById } = useProducts();
+  const { products, isLoading: productsLoading, getProductById } = useProducts();
   const [product, setProduct] = useState<Product | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [fetchAttempted, setFetchAttempted] = useState(false);
+  const fetchedIdRef = useRef<string | null>(null);
+
+  // Memoized fetch function to avoid re-creating on every render
+  const fetchProduct = useCallback(async (productId: string) => {
+    if (fetchedIdRef.current === productId) return;
+    fetchedIdRef.current = productId;
+    
+    setIsLoading(true);
+    const result = await getProductById(productId);
+    setProduct(result);
+    setIsLoading(false);
+    setFetchAttempted(true);
+  }, [getProductById]);
 
   useEffect(() => {
-    if (id) {
-      // First check if product is already in cache (from useProducts)
-      const cachedProduct = products.find((p) => p.id === id);
-      if (cachedProduct) {
-        setProduct(cachedProduct);
-        setIsLoading(false);
-        return;
-      }
+    if (!id) return;
 
-      // If not in cache, fetch it
-      getProductById(id).then((p) => {
-        setProduct(p);
-        setIsLoading(false);
-      });
+    // Check if product is in cached products list
+    const cachedProduct = products.find((p) => p.id === id);
+    if (cachedProduct) {
+      setProduct(cachedProduct);
+      setIsLoading(false);
+      fetchedIdRef.current = id;
+      return;
     }
-  }, [id, getProductById, products]);
+
+    // If products are still loading, wait for them
+    if (productsLoading) return;
+
+    // If products finished loading but product not found, try direct fetch
+    if (!fetchAttempted || fetchedIdRef.current !== id) {
+      fetchProduct(id);
+    }
+  }, [id, products, productsLoading, fetchProduct, fetchAttempted]);
 
   if (isLoading) {
     return (

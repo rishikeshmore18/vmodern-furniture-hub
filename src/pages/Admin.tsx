@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -11,7 +11,8 @@ import {
   Globe,
   LogOut,
   Menu,
-  Loader2
+  Loader2,
+  X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,6 +47,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Product, ProductCategory, SetItem, calculateFinalPrice } from '@/types/product';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { Progress } from '@/components/ui/progress';
 import { MultipleImageUpload } from '@/components/admin/MultipleImageUpload';
 import { SetItemsEditor } from '@/components/admin/SetItemsEditor';
 import { CategorySelector } from '@/components/admin/CategorySelector';
@@ -71,6 +73,8 @@ const Admin = () => {
   const [activeView, setActiveView] = useState<AdminView>('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveProgress, setSaveProgress] = useState(0);
+  const saveAbortController = useRef<AbortController | null>(null);
 
   // Product form state
   const [formData, setFormData] = useState({
@@ -150,6 +154,19 @@ const Admin = () => {
     setIsDialogOpen(true);
   };
 
+  const handleCancelSave = () => {
+    if (saveAbortController.current) {
+      saveAbortController.current.abort();
+      saveAbortController.current = null;
+    }
+    setIsSaving(false);
+    setSaveProgress(0);
+    toast({
+      title: 'Save cancelled',
+      description: 'Product save was cancelled.',
+    });
+  };
+
   const handleSaveProduct = async () => {
     // Validation
     if (!formData.name.trim()) {
@@ -211,18 +228,41 @@ const Admin = () => {
     };
 
     setIsSaving(true);
+    setSaveProgress(10);
+    saveAbortController.current = new AbortController();
+    
+    // Simulate progress updates
+    const progressInterval = setInterval(() => {
+      setSaveProgress((prev) => {
+        if (prev >= 90) {
+          clearInterval(progressInterval);
+          return 90;
+        }
+        return prev + 15;
+      });
+    }, 200);
+
     try {
       if (editingProduct) {
         await updateProduct(editingProduct.id, productData);
       } else {
         await addProduct(productData);
       }
+      clearInterval(progressInterval);
+      setSaveProgress(100);
+      
+      // Small delay to show 100% before closing
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      
       setIsDialogOpen(false);
       resetForm();
     } catch (err) {
+      clearInterval(progressInterval);
       // Error is already handled in hook with toast
     } finally {
       setIsSaving(false);
+      setSaveProgress(0);
+      saveAbortController.current = null;
     }
   };
 
@@ -605,31 +645,44 @@ const Admin = () => {
                             </div>
                           </div>
                         </div>
+                        {/* Progress bar during save */}
+                        {isSaving && (
+                          <div className="space-y-2 pt-4">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">Saving product...</span>
+                              <span className="text-muted-foreground">{saveProgress}%</span>
+                            </div>
+                            <Progress value={saveProgress} className="h-2" />
+                          </div>
+                        )}
+                        
                         <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-4">
-                          <Button 
-                            type="button"
-                            variant="outline" 
-                            onClick={() => {
-                              if (isSaving) return;
-                              setIsDialogOpen(false);
-                              resetForm();
-                            }} 
-                            disabled={isSaving}
-                          >
-                            {isSaving ? 'Cancel' : 'Close'}
-                          </Button>
-                          <Button type="button" onClick={handleSaveProduct} disabled={isSaving}>
-                            {isSaving ? (
-                              <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Saving...
-                              </>
-                            ) : (
-                              <>
+                          {isSaving ? (
+                            <Button 
+                              type="button"
+                              variant="destructive" 
+                              onClick={handleCancelSave}
+                            >
+                              <X className="mr-2 h-4 w-4" />
+                              Cancel Save
+                            </Button>
+                          ) : (
+                            <>
+                              <Button 
+                                type="button"
+                                variant="outline" 
+                                onClick={() => {
+                                  setIsDialogOpen(false);
+                                  resetForm();
+                                }} 
+                              >
+                                Close
+                              </Button>
+                              <Button type="button" onClick={handleSaveProduct}>
                                 {editingProduct ? 'Update' : 'Add'} Product
-                              </>
-                            )}
-                          </Button>
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </fieldset>
                     </DialogContent>
