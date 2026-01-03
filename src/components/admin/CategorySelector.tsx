@@ -125,7 +125,11 @@ export function CategorySelector({
         ) : (
           <Select value={category || ''} onValueChange={handleCategorySelect}>
             <SelectTrigger className="mt-1">
-              <SelectValue placeholder="Select category" />
+              {displayCategory ? (
+                <SelectValue>{displayCategory}</SelectValue>
+              ) : (
+                <SelectValue placeholder="Select category" />
+              )}
             </SelectTrigger>
             <SelectContent>
               {needsHiddenCategoryItem && (
@@ -175,7 +179,11 @@ export function CategorySelector({
         ) : (
           <Select value={subcategory || ''} onValueChange={handleSubcategorySelect}>
             <SelectTrigger className="mt-1">
-              <SelectValue placeholder="Select subcategory" />
+              {displaySubcategory ? (
+                <SelectValue>{displaySubcategory}</SelectValue>
+              ) : (
+                <SelectValue placeholder="Select subcategory" />
+              )}
             </SelectTrigger>
             <SelectContent>
               {needsHiddenSubcategoryItem && (
