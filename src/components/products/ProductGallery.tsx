@@ -70,7 +70,6 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
             draggable={false}
             loading={selectedIndex === 0 ? "eager" : "lazy"}
             decoding="async"
-            fetchPriority={selectedIndex === 0 ? "high" : "auto"}
           />
           
           {/* Zoom indicator */}

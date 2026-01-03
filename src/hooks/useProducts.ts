@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Product, SetItem, calculateFinalPrice } from '@/types/product';
 import { toast } from '@/hooks/use-toast';
@@ -44,6 +44,26 @@ interface DbSetItemImage {
   display_order: number;
 }
 
+// Helper function to retry failed requests with exponential backoff
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  retries: number = 2,
+  delay: number = 300
+): Promise<T> {
+  let lastError: Error | null = null;
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err as Error;
+      if (i < retries) {
+        await new Promise((resolve) => setTimeout(resolve, delay * (i + 1)));
+      }
+    }
+  }
+  throw lastError;
+}
+
 // Convert database product to frontend Product type
 function dbToProduct(
   dbProduct: DbProduct,
@@ -58,7 +78,6 @@ function dbToProduct(
   const productSetItems: SetItem[] = setItems
     .sort((a, b) => a.display_order - b.display_order)
     .map((item) => {
-      // Get images for this set item
       const itemImages = setItemImages
         .filter((img) => img.set_item_id === item.id)
         .sort((a, b) => a.display_order - b.display_order)
@@ -68,7 +87,7 @@ function dbToProduct(
         id: item.id,
         name: item.name,
         price: item.price,
-        imageUrl: item.image_url || undefined, // Backward compatibility
+        imageUrl: item.image_url || undefined,
         imageUrls: itemImages.length > 0 ? itemImages : undefined,
       };
     });
@@ -103,64 +122,67 @@ export function useProducts() {
       setIsLoading(true);
       setError(null);
 
-      // Fetch all products
-      const productsQuery = supabase
-        .from('products')
-        .select('*')
-        .order('created_at', { ascending: false });
+      // Fetch all products with retry
+      const productsResult = await withRetry(async () => {
+        const result = await supabase
+          .from('products')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (result.error) throw result.error;
+        return result;
+      });
 
-      const { data: productsData, error: productsError } = await productsQuery;
-
-      if (productsError) throw productsError;
-
-      if (!productsData || productsData.length === 0) {
+      if (!productsResult.data || productsResult.data.length === 0) {
         setProducts([]);
         setIsLoading(false);
         return;
       }
 
-      const productIds = productsData.map((p) => p.id);
+      const productIds = productsResult.data.map((p) => p.id);
 
-      // Fetch all related data in parallel for better performance
-      const [imagesResult, setItemsResult, setItemImagesResult] = await Promise.all([
-        // Fetch all images for these products
-        supabase
-          .from('product_images')
-          .select('*')
-          .in('product_id', productIds),
-        // Fetch all set items for these products
-        supabase
-          .from('set_items')
-          .select('*')
-          .in('product_id', productIds),
-        // Pre-fetch set item images query (will be executed after we get set items)
-        Promise.resolve({ data: null, error: null } as { data: null; error: null }),
+      // Fetch all related data in parallel with retry
+      const [imagesResult, setItemsResult] = await Promise.all([
+        withRetry(async () => {
+          const result = await supabase
+            .from('product_images')
+            .select('*')
+            .in('product_id', productIds);
+          if (result.error) throw result.error;
+          return result;
+        }),
+        withRetry(async () => {
+          const result = await supabase
+            .from('set_items')
+            .select('*')
+            .in('product_id', productIds);
+          if (result.error) throw result.error;
+          return result;
+        }),
       ]);
-
-      if (imagesResult.error) throw imagesResult.error;
-      if (setItemsResult.error) throw setItemsResult.error;
 
       // Fetch set item images if we have set items
       const setItemIds = (setItemsResult.data || []).map((item) => item.id);
-      let setItemImagesData = null;
+      let setItemImagesData: DbSetItemImage[] | null = null;
       if (setItemIds.length > 0) {
-        const { data, error: setItemImagesError } = await supabase
-          .from('set_item_images')
-          .select('*')
-          .in('set_item_id', setItemIds);
-
-        if (setItemImagesError) {
-          // Table might not exist yet, continue without set item images
-          console.warn('set_item_images table not found, continuing without set item images');
-        } else {
-          setItemImagesData = data;
+        try {
+          const result = await withRetry(async () => {
+            const res = await supabase
+              .from('set_item_images')
+              .select('*')
+              .in('set_item_id', setItemIds);
+            if (res.error) throw res.error;
+            return res;
+          });
+          setItemImagesData = result.data as DbSetItemImage[];
+        } catch {
+          console.warn('set_item_images fetch failed, continuing without');
         }
       }
 
       // Convert to frontend products
       const imagesData = imagesResult.data || [];
       const setItemsData = setItemsResult.data || [];
-      const frontendProducts = productsData.map((dbProduct) => {
+      const frontendProducts = productsResult.data.map((dbProduct) => {
         const productImages = imagesData.filter(
           (img) => img.product_id === dbProduct.id
         ) as DbProductImage[];
@@ -171,7 +193,12 @@ export function useProducts() {
           (img) => productSetItems.some((item) => item.id === img.set_item_id)
         );
 
-        return dbToProduct(dbProduct as DbProduct, productImages, productSetItems, productSetItemImages);
+        return dbToProduct(
+          dbProduct as DbProduct,
+          productImages,
+          productSetItems,
+          productSetItemImages
+        );
       });
 
       setProducts(frontendProducts);
@@ -187,9 +214,10 @@ export function useProducts() {
     fetchProducts();
   }, [fetchProducts]);
 
-  const addProduct = async (product: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'priceFinal'>) => {
+  const addProduct = async (
+    product: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'priceFinal'>
+  ) => {
     try {
-      // Insert product
       const { data: newProduct, error: productError } = await supabase
         .from('products')
         .insert({
@@ -209,7 +237,6 @@ export function useProducts() {
 
       if (productError) throw productError;
 
-      // Insert images if any
       if (product.imageUrls && product.imageUrls.length > 0) {
         const imageInserts = product.imageUrls.map((url, index) => ({
           product_id: newProduct.id,
@@ -224,13 +251,14 @@ export function useProducts() {
         if (imagesError) throw imagesError;
       }
 
-      // Insert set items if any
       if (product.setItems && product.setItems.length > 0) {
         const setItemInserts = product.setItems.map((item, index) => ({
           product_id: newProduct.id,
           name: item.name,
           price: item.price,
-          image_url: item.imageUrl || (item.imageUrls && item.imageUrls.length > 0 ? item.imageUrls[0] : null),
+          image_url:
+            item.imageUrl ||
+            (item.imageUrls && item.imageUrls.length > 0 ? item.imageUrls[0] : null),
           display_order: index,
         }));
 
@@ -241,7 +269,6 @@ export function useProducts() {
 
         if (setItemsError) throw setItemsError;
 
-        // Insert set item images if any
         if (insertedSetItems) {
           const setItemImageInserts: Array<{
             set_item_id: string;
@@ -268,14 +295,12 @@ export function useProducts() {
               .insert(setItemImageInserts);
 
             if (setItemImagesError) {
-              // Table might not exist yet, log warning but don't fail
               console.warn('Failed to insert set item images:', setItemImagesError);
             }
           }
         }
       }
 
-      // Build the new product object and add it optimistically to state
       const now = new Date().toISOString();
       const newFrontendProduct: Product = {
         id: newProduct.id,
@@ -296,19 +321,20 @@ export function useProducts() {
         updatedAt: now,
       };
 
-      // Optimistically update state
       setProducts((prev) => [newFrontendProduct, ...prev]);
 
       toast({ title: 'Product added successfully' });
       return newProduct;
     } catch (err: any) {
       console.error('Error adding product:', err);
-      // Refetch to restore correct state if optimistic update was applied
       await fetchProducts();
       const errorMessage = err?.message || 'Unknown error occurred';
       toast({
         title: 'Failed to add product',
-        description: errorMessage.length > 100 ? 'Please check the console for details.' : errorMessage,
+        description:
+          errorMessage.length > 100
+            ? 'Please check the console for details.'
+            : errorMessage,
         variant: 'destructive',
       });
       throw err;
@@ -320,7 +346,6 @@ export function useProducts() {
     product: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'priceFinal'>
   ) => {
     try {
-      // Update product
       const { error: productError } = await supabase
         .from('products')
         .update({
@@ -339,7 +364,6 @@ export function useProducts() {
 
       if (productError) throw productError;
 
-      // Delete existing images and re-insert
       await supabase.from('product_images').delete().eq('product_id', id);
 
       if (product.imageUrls && product.imageUrls.length > 0) {
@@ -356,8 +380,6 @@ export function useProducts() {
         if (imagesError) throw imagesError;
       }
 
-      // Delete existing set items and re-insert
-      // First get existing set item IDs to delete their images
       const { data: existingSetItems } = await supabase
         .from('set_items')
         .select('id')
@@ -365,7 +387,6 @@ export function useProducts() {
 
       if (existingSetItems && existingSetItems.length > 0) {
         const existingSetItemIds = existingSetItems.map((item) => item.id);
-        // Delete set item images
         await supabase
           .from('set_item_images')
           .delete()
@@ -379,7 +400,9 @@ export function useProducts() {
           product_id: id,
           name: item.name,
           price: item.price,
-          image_url: item.imageUrl || (item.imageUrls && item.imageUrls.length > 0 ? item.imageUrls[0] : null),
+          image_url:
+            item.imageUrl ||
+            (item.imageUrls && item.imageUrls.length > 0 ? item.imageUrls[0] : null),
           display_order: index,
         }));
 
@@ -390,7 +413,6 @@ export function useProducts() {
 
         if (setItemsError) throw setItemsError;
 
-        // Insert set item images if any
         if (insertedSetItems) {
           const setItemImageInserts: Array<{
             set_item_id: string;
@@ -417,14 +439,12 @@ export function useProducts() {
               .insert(setItemImageInserts);
 
             if (setItemImagesError) {
-              // Table might not exist yet, log warning but don't fail
               console.warn('Failed to insert set item images:', setItemImagesError);
             }
           }
         }
       }
 
-      // Optimistically update state
       const now = new Date().toISOString();
       const updatedProduct: Product = {
         id,
@@ -441,7 +461,7 @@ export function useProducts() {
         mainImageUrl: product.mainImageUrl,
         imageUrls: product.imageUrls,
         setItems: product.setItems,
-        createdAt: '', // Will be preserved from existing product
+        createdAt: '',
         updatedAt: now,
       };
 
@@ -457,12 +477,14 @@ export function useProducts() {
       toast({ title: 'Product updated successfully' });
     } catch (err: any) {
       console.error('Error updating product:', err);
-      // Refetch to restore correct state if optimistic update was applied
       await fetchProducts();
       const errorMessage = err?.message || 'Unknown error occurred';
       toast({
         title: 'Failed to update product',
-        description: errorMessage.length > 100 ? 'Please check the console for details.' : errorMessage,
+        description:
+          errorMessage.length > 100
+            ? 'Please check the console for details.'
+            : errorMessage,
         variant: 'destructive',
       });
       throw err;
@@ -471,13 +493,11 @@ export function useProducts() {
 
   const deleteProduct = async (id: string) => {
     try {
-      // Optimistically remove from state
       setProducts((prev) => prev.filter((p) => p.id !== id));
 
       const { error } = await supabase.from('products').delete().eq('id', id);
 
       if (error) {
-        // If delete fails, refetch to restore state
         await fetchProducts();
         throw error;
       }
@@ -502,35 +522,54 @@ export function useProducts() {
         return cachedProduct;
       }
 
-      // If not in cache, fetch from database with parallel queries
+      // Fetch from database with parallel queries and retry
       const [productResult, imagesResult, setItemsResult] = await Promise.all([
-        supabase
-          .from('products')
-          .select('*')
-          .eq('id', id)
-          .maybeSingle(),
-        supabase
-          .from('product_images')
-          .select('*')
-          .eq('product_id', id),
-        supabase
-          .from('set_items')
-          .select('*')
-          .eq('product_id', id),
+        withRetry(async () => {
+          const result = await supabase
+            .from('products')
+            .select('*')
+            .eq('id', id)
+            .maybeSingle();
+          if (result.error) throw result.error;
+          return result;
+        }),
+        withRetry(async () => {
+          const result = await supabase
+            .from('product_images')
+            .select('*')
+            .eq('product_id', id);
+          if (result.error) throw result.error;
+          return result;
+        }),
+        withRetry(async () => {
+          const result = await supabase
+            .from('set_items')
+            .select('*')
+            .eq('product_id', id);
+          if (result.error) throw result.error;
+          return result;
+        }),
       ]);
 
-      if (productResult.error) throw productResult.error;
       if (!productResult.data) return null;
 
       // Fetch set item images if we have set items
       const setItemIds = (setItemsResult.data || []).map((item) => item.id);
-      let setItemImagesData = null;
+      let setItemImagesData: DbSetItemImage[] | null = null;
       if (setItemIds.length > 0) {
-        const { data } = await supabase
-          .from('set_item_images')
-          .select('*')
-          .in('set_item_id', setItemIds);
-        setItemImagesData = data;
+        try {
+          const result = await withRetry(async () => {
+            const res = await supabase
+              .from('set_item_images')
+              .select('*')
+              .in('set_item_id', setItemIds);
+            if (res.error) throw res.error;
+            return res;
+          });
+          setItemImagesData = result.data as DbSetItemImage[];
+        } catch {
+          // Continue without set item images
+        }
       }
 
       return dbToProduct(
@@ -557,74 +596,129 @@ export function useProducts() {
   };
 }
 
-// Hook for public product display (read-only)
+// Cache for public products
+let publicProductsCache: {
+  products: Product[];
+  timestamp: number;
+} | null = null;
+const CACHE_DURATION = 60000; // 1 minute cache
+
+// Hook for public product display (read-only) with caching
 export function usePublicProducts() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [products, setProducts] = useState<Product[]>(() => {
+    if (publicProductsCache && Date.now() - publicProductsCache.timestamp < CACHE_DURATION) {
+      return publicProductsCache.products;
+    }
+    return [];
+  });
+  const [isLoading, setIsLoading] = useState(() => {
+    return !(publicProductsCache && Date.now() - publicProductsCache.timestamp < CACHE_DURATION);
+  });
+  const fetchInProgress = useRef(false);
 
   useEffect(() => {
     const fetchProducts = async () => {
+      // Use cache if fresh
+      if (publicProductsCache && Date.now() - publicProductsCache.timestamp < CACHE_DURATION) {
+        setProducts(publicProductsCache.products);
+        setIsLoading(false);
+        return;
+      }
+
+      // Prevent duplicate fetches
+      if (fetchInProgress.current) return;
+      fetchInProgress.current = true;
+
       try {
         setIsLoading(true);
-        const { data: productsData, error: productsError } = await supabase
-          .from('products')
-          .select('*')
-          .order('created_at', { ascending: false });
 
-        if (productsError) throw productsError;
+        const productsResult = await withRetry(async () => {
+          const result = await supabase
+            .from('products')
+            .select('*')
+            .order('created_at', { ascending: false });
+          if (result.error) throw result.error;
+          return result;
+        });
 
-        if (!productsData || productsData.length === 0) {
+        if (!productsResult.data || productsResult.data.length === 0) {
           setProducts([]);
+          publicProductsCache = { products: [], timestamp: Date.now() };
           setIsLoading(false);
+          fetchInProgress.current = false;
           return;
         }
 
-        const productIds = productsData.map((p) => p.id);
+        const productIds = productsResult.data.map((p) => p.id);
 
-        // Fetch all related data in parallel for better performance
+        // Fetch all related data in parallel with retry
         const [imagesResult, setItemsResult] = await Promise.all([
-          supabase
-            .from('product_images')
-            .select('*')
-            .in('product_id', productIds),
-          supabase
-            .from('set_items')
-            .select('*')
-            .in('product_id', productIds),
+          withRetry(async () => {
+            const result = await supabase
+              .from('product_images')
+              .select('*')
+              .in('product_id', productIds);
+            if (result.error) throw result.error;
+            return result;
+          }),
+          withRetry(async () => {
+            const result = await supabase
+              .from('set_items')
+              .select('*')
+              .in('product_id', productIds);
+            if (result.error) throw result.error;
+            return result;
+          }),
         ]);
 
         // Fetch set item images if we have set items
         const setItemIds = (setItemsResult.data || []).map((item) => item.id);
-        let setItemImagesData = null;
+        let setItemImagesData: DbSetItemImage[] | null = null;
         if (setItemIds.length > 0) {
-          const { data } = await supabase
-            .from('set_item_images')
-            .select('*')
-            .in('set_item_id', setItemIds);
-          setItemImagesData = data;
+          try {
+            const result = await withRetry(async () => {
+              const res = await supabase
+                .from('set_item_images')
+                .select('*')
+                .in('set_item_id', setItemIds);
+              if (res.error) throw res.error;
+              return res;
+            });
+            setItemImagesData = result.data as DbSetItemImage[];
+          } catch {
+            // Continue without set item images
+          }
         }
 
         const imagesData = imagesResult.data || [];
         const setItemsData = setItemsResult.data || [];
-        const frontendProducts = productsData.map((dbProduct) => {
+        const frontendProducts = productsResult.data.map((dbProduct) => {
           const productImages = imagesData.filter(
             (img) => img.product_id === dbProduct.id
           ) as DbProductImage[];
           const productSetItems = setItemsData.filter(
             (item) => item.product_id === dbProduct.id
           ) as DbSetItem[];
-          const productSetItemImages = ((setItemImagesData || []) as DbSetItemImage[]).filter(
-            (img) => productSetItems.some((item) => item.id === img.set_item_id)
-          );
+          const productSetItemImages = (
+            (setItemImagesData || []) as DbSetItemImage[]
+          ).filter((img) => productSetItems.some((item) => item.id === img.set_item_id));
 
-          return dbToProduct(dbProduct as DbProduct, productImages, productSetItems, productSetItemImages);
+          return dbToProduct(
+            dbProduct as DbProduct,
+            productImages,
+            productSetItems,
+            productSetItemImages
+          );
         });
 
+        // Update cache
+        publicProductsCache = { products: frontendProducts, timestamp: Date.now() };
         setProducts(frontendProducts);
       } catch (err) {
         console.error('Error fetching products:', err);
       } finally {
         setIsLoading(false);
+        fetchInProgress.current = false;
       }
     };
 
