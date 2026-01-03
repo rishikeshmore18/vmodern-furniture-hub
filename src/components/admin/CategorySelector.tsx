@@ -1,16 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Plus, Check } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   getStoredCategories,
   addCustomCategory,
@@ -43,25 +36,12 @@ export function CategorySelector({
     setCategories(getStoredCategories());
   }, []);
 
-  const formatLabel = (value: string) =>
-    value
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, (char) => char.toUpperCase());
   const normalizeKey = (value: string) => value.trim().toLowerCase().replace(/\s+/g, '_');
 
   // Find exact match first, then try normalized match
   const currentCategory = categories.find((c) => c.name === category);
   const categoryBySlug = categories.find((c) => normalizeKey(c.name) === normalizeKey(category));
   const subcategories = (currentCategory || categoryBySlug)?.subcategories || [];
-  
-  // Format display text for the selected category
-  const displayCategory = category
-    ? (currentCategory?.name || categoryBySlug?.name || formatLabel(category))
-    : '';
-  
-  // Need hidden item if category exists but doesn't match any visible item exactly
-  // This ensures Radix UI can always find a matching SelectItem to display
-  const needsHiddenCategoryItem = category.length > 0 && !currentCategory && !categoryBySlug;
 
   const handleAddCustomCategory = () => {
     if (customCategoryInput.trim()) {
@@ -103,12 +83,6 @@ export function CategorySelector({
     }
   };
 
-  // Find exact match for subcategory
-  const subcategoryMatch = subcategories.find((sub) => sub === subcategory);
-  const displaySubcategory = subcategory ? formatLabel(subcategory) : '';
-  // Need hidden item if subcategory exists but doesn't match any visible item
-  const needsHiddenSubcategoryItem = subcategory.length > 0 && !subcategoryMatch;
-
   return (
     <div className="space-y-4">
       {/* Category */}
@@ -134,44 +108,33 @@ export function CategorySelector({
             </Button>
           </div>
         ) : (
-          <div className="space-y-2">
-            <Select value={category || ''} onValueChange={handleCategorySelect}>
-              <SelectTrigger className="mt-1">
-                {displayCategory ? (
-                  <span>{displayCategory}</span>
-                ) : (
-                  <SelectValue placeholder="Select category" />
-                )}
-              </SelectTrigger>
-              <SelectContent>
-                {/* Always ensure a matching SelectItem exists for the current value */}
-                {needsHiddenCategoryItem && (
-                  <SelectItem value={category} className="hidden">
-                    {displayCategory}
-                  </SelectItem>
-                )}
-                {categories.map((cat) => (
-                  <SelectItem key={cat.name} value={cat.name}>
-                    {cat.name}
-                  </SelectItem>
-                ))}
-                <SelectItem value="__custom__">
-                  <span className="flex items-center gap-2 text-primary">
-                    <Plus className="h-4 w-4" />
-                    Add Custom...
-                  </span>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            {displayCategory && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground animate-in fade-in-0 slide-in-from-top-1 duration-200">
-                <Check className="h-3.5 w-3.5 text-green-500" />
-                <span>Selected:</span>
-                <Badge variant="secondary" className="font-medium">
-                  {displayCategory}
-                </Badge>
-              </div>
-            )}
+          <div className="mt-2 space-y-3">
+            <RadioGroup
+              value={category}
+              onValueChange={handleCategorySelect}
+              className="grid gap-2"
+            >
+              {categories.map((cat) => {
+                const id = `category-${normalizeKey(cat.name)}`;
+                return (
+                  <div key={cat.name} className="flex items-center space-x-2">
+                    <RadioGroupItem value={cat.name} id={id} />
+                    <Label htmlFor={id} className="font-normal cursor-pointer">
+                      {cat.name}
+                    </Label>
+                  </div>
+                );
+              })}
+            </RadioGroup>
+            <Button
+              type="button"
+              variant="ghost"
+              className="justify-start px-0 text-primary"
+              onClick={() => setShowCustomCategory(true)}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add Custom...
+            </Button>
           </div>
         )}
       </div>
@@ -200,43 +163,33 @@ export function CategorySelector({
               </Button>
             </div>
         ) : (
-          <div className="space-y-2">
-            <Select value={subcategory || ''} onValueChange={handleSubcategorySelect}>
-              <SelectTrigger className="mt-1">
-                {displaySubcategory ? (
-                  <span>{displaySubcategory}</span>
-                ) : (
-                  <SelectValue placeholder="Select subcategory" />
-                )}
-              </SelectTrigger>
-              <SelectContent>
-                {needsHiddenSubcategoryItem && (
-                  <SelectItem value={subcategory} className="hidden">
-                    {displaySubcategory}
-                  </SelectItem>
-                )}
-                {subcategories.map((sub) => (
-                  <SelectItem key={sub} value={sub}>
-                    {sub}
-                  </SelectItem>
-                ))}
-                <SelectItem value="__custom__">
-                  <span className="flex items-center gap-2 text-primary">
-                    <Plus className="h-4 w-4" />
-                    Add Custom...
-                  </span>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            {displaySubcategory && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground animate-in fade-in-0 slide-in-from-top-1 duration-200">
-                <Check className="h-3.5 w-3.5 text-green-500" />
-                <span>Selected:</span>
-                <Badge variant="secondary" className="font-medium">
-                  {displaySubcategory}
-                </Badge>
-              </div>
-            )}
+          <div className="mt-2 space-y-3">
+            <RadioGroup
+              value={subcategory}
+              onValueChange={handleSubcategorySelect}
+              className="grid gap-2"
+            >
+              {subcategories.map((sub) => {
+                const id = `subcategory-${normalizeKey(sub)}`;
+                return (
+                  <div key={sub} className="flex items-center space-x-2">
+                    <RadioGroupItem value={sub} id={id} />
+                    <Label htmlFor={id} className="font-normal cursor-pointer">
+                      {sub}
+                    </Label>
+                  </div>
+                );
+              })}
+            </RadioGroup>
+            <Button
+              type="button"
+              variant="ghost"
+              className="justify-start px-0 text-primary"
+              onClick={() => setShowCustomSubcategory(true)}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add Custom...
+            </Button>
           </div>
         )}
         </div>
