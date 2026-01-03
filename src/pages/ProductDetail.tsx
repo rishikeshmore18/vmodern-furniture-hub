@@ -9,7 +9,7 @@ import { ProductGallery } from '@/components/products/ProductGallery';
 
 const ProductDetail = () => {
   const { id } = useParams<{ id: string }>();
-  const { product, isLoading } = useProductById(id);
+  const { product, parentSet, setChildren, isLoading } = useProductById(id);
 
   if (isLoading) {
     return (
@@ -50,6 +50,16 @@ const ProductDetail = () => {
 
   const hasDiscount = product.discountPercent > 0;
   const isFloorSample = product.category === 'floor_sample';
+  const isSetProduct = !!product.isSet || (product.setItems && product.setItems.length > 0);
+  const legacySetItems = product.setItems || [];
+  const hasSetChildren = setChildren.length > 0;
+  const includedItemsTotal = hasSetChildren
+    ? setChildren.reduce((sum, item) => sum + item.priceFinal, 0)
+    : legacySetItems.reduce((sum, item) => sum + (item.price || 0), 0);
+  const setSavings =
+    includedItemsTotal > 0 && includedItemsTotal > product.priceFinal
+      ? includedItemsTotal - product.priceFinal
+      : 0;
 
   return (
     <Layout>
@@ -135,6 +145,101 @@ const ProductDetail = () => {
                 {product.description}
               </p>
             </div>
+
+            {/* Set items */}
+            {isSetProduct && (hasSetChildren || legacySetItems.length > 0) && (
+              <div className="mt-8 rounded-lg border border-border bg-secondary/20 p-4">
+                <h2 className="text-lg font-semibold text-foreground">What&apos;s Included</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Each item can be viewed individually, or purchased together as a complete set.
+                </p>
+                <div className="mt-4 space-y-3">
+                  {hasSetChildren
+                    ? setChildren.map((item) => (
+                        <Link
+                          key={item.id}
+                          to={`/product/${item.id}`}
+                          className="flex items-center justify-between gap-4 rounded-lg border border-border bg-card p-3 transition-colors hover:bg-accent/30"
+                        >
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={item.mainImageUrl}
+                              alt={item.name}
+                              className="h-14 w-14 rounded-md object-cover"
+                              loading="lazy"
+                              decoding="async"
+                            />
+                            <div>
+                              <p className="font-medium text-foreground">{item.name}</p>
+                              {item.subcategory && (
+                                <p className="text-sm text-muted-foreground">
+                                  {item.subcategory}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-sm font-semibold text-foreground">
+                            ${item.priceFinal.toFixed(2)}
+                          </div>
+                        </Link>
+                      ))
+                    : legacySetItems.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between rounded-lg border border-border bg-card p-3"
+                        >
+                          <span className="text-sm font-medium text-foreground">{item.name}</span>
+                          <span className="text-sm font-semibold text-foreground">
+                            ${item.price.toFixed(2)}
+                          </span>
+                        </div>
+                      ))}
+                </div>
+                {includedItemsTotal > 0 && (
+                  <div className="mt-4 rounded-lg border border-border bg-secondary/30 p-3 text-sm">
+                    <div className="flex items-center justify-between text-muted-foreground">
+                      <span>Individual items total</span>
+                      <span>${includedItemsTotal.toFixed(2)}</span>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between text-muted-foreground">
+                      <span>Set price</span>
+                      <span>${product.priceFinal.toFixed(2)}</span>
+                    </div>
+                    {setSavings > 0 && (
+                      <div className="mt-1 flex items-center justify-between font-medium text-foreground">
+                        <span>You save</span>
+                        <span>${setSavings.toFixed(2)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Part of set */}
+            {!isSetProduct && parentSet && (
+              <div className="mt-8 rounded-lg border border-border bg-secondary/20 p-4">
+                <h2 className="text-lg font-semibold text-foreground">
+                  Part of {parentSet.name}
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  This item is included in a complete set. Save by purchasing the full set.
+                </p>
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Set price
+                    </p>
+                    <p className="text-lg font-semibold text-foreground">
+                      ${parentSet.priceFinal.toFixed(2)}
+                    </p>
+                  </div>
+                  <Button asChild variant="outline">
+                    <Link to={`/product/${parentSet.id}`}>View Complete Set</Link>
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {/* CTA */}
             <div className="mt-8 space-y-4">

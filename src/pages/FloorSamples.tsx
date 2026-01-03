@@ -2,17 +2,27 @@ import { useState, useMemo, useEffect } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { ProductGrid } from '@/components/products/ProductGrid';
 import { CategoryFilter } from '@/components/products/CategoryFilter';
-import { usePaginatedFloorSamples } from '@/hooks/useProducts';
+import { fetchFloorSampleSubcategories, usePaginatedFloorSamples } from '@/hooks/useProducts';
 import { Button } from '@/components/ui/button';
 import { Product } from '@/types/product';
+import { SubcategoryFilter } from '@/components/products/SubcategoryFilter';
 
 const PAGE_SIZE = 12;
+const CATEGORY_LABELS: Record<string, string> = {
+  bedroom_set: 'Bedroom Set',
+  dining_set: 'Dining Set',
+  sofa_set: 'Sofa Set',
+  accessories: 'Accessories',
+};
 
 const FloorSamples = () => {
   const [page, setPage] = useState(1);
   const [loadedProducts, setLoadedProducts] = useState<Product[]>([]);
   const { products: pageProducts, isLoading, totalCount, hasMore } = usePaginatedFloorSamples(page, PAGE_SIZE);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(null);
+  const [availableSubcategories, setAvailableSubcategories] = useState<string[]>([]);
+  const [isSubcategoryLoading, setIsSubcategoryLoading] = useState(false);
 
   useEffect(() => {
     if (page === 1) {
@@ -27,25 +37,83 @@ const FloorSamples = () => {
     });
   }, [page, pageProducts]);
 
-  const filteredProducts = useMemo(() => {
-    if (!selectedCategory) return loadedProducts;
-    const categoryMap: Record<string, string[]> = {
-      'bedroom_set': ['Bedroom Set', 'bedroom_set'],
-      'dining_set': ['Dining Set', 'dining_set'],
-      'sofa_set': ['Sofa Set', 'sofa_set'],
-      'accessories': ['Accessories', 'accessories'],
+  useEffect(() => {
+    let isActive = true;
+
+    if (!selectedCategory) {
+      setAvailableSubcategories([]);
+      setSelectedSubcategory(null);
+      setIsSubcategoryLoading(false);
+      return () => {
+        isActive = false;
+      };
+    }
+
+    const categoryLabel = CATEGORY_LABELS[selectedCategory] || selectedCategory;
+    setSelectedSubcategory(null);
+    setIsSubcategoryLoading(true);
+
+    fetchFloorSampleSubcategories(categoryLabel)
+      .then((subcategories) => {
+        if (!isActive) return;
+        setAvailableSubcategories(subcategories);
+      })
+      .catch((err) => {
+        if (!isActive) return;
+        console.error('Error fetching subcategories:', err);
+        setAvailableSubcategories([]);
+      })
+      .finally(() => {
+        if (!isActive) return;
+        setIsSubcategoryLoading(false);
+      });
+
+    return () => {
+      isActive = false;
     };
-    const matchTerms = categoryMap[selectedCategory] || [selectedCategory];
-    return loadedProducts.filter(p => 
-      matchTerms.some(term => 
-        p.productType?.toLowerCase() === term.toLowerCase() ||
-        p.name.toLowerCase().includes(term.toLowerCase().replace('_', ' '))
-      )
-    );
-  }, [loadedProducts, selectedCategory]);
+  }, [selectedCategory]);
+
+  const filteredProducts = useMemo(() => {
+    let filtered = loadedProducts;
+
+    if (selectedCategory) {
+      const categoryLabel = CATEGORY_LABELS[selectedCategory] || selectedCategory;
+      const normalizedLabel = categoryLabel.toLowerCase();
+      const normalizedId = selectedCategory.toLowerCase();
+      filtered = filtered.filter((product) => {
+        const productType = product.productType?.toLowerCase() || '';
+        return (
+          productType === normalizedLabel ||
+          productType === normalizedId ||
+          product.name.toLowerCase().includes(normalizedLabel.replace('_', ' '))
+        );
+      });
+    }
+
+    if (selectedSubcategory) {
+      const normalizedSubcategory = selectedSubcategory.toLowerCase();
+      filtered = filtered.filter(
+        (product) => product.subcategory?.toLowerCase() === normalizedSubcategory
+      );
+    }
+
+    if (!selectedCategory) {
+      filtered = [...filtered].sort((a, b) => {
+        const aIsSet = a.isSet ? 1 : 0;
+        const bIsSet = b.isSet ? 1 : 0;
+        if (aIsSet !== bIsSet) {
+          return bIsSet - aIsSet;
+        }
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+    }
+
+    return filtered;
+  }, [loadedProducts, selectedCategory, selectedSubcategory]);
 
   const isInitialLoading = isLoading && loadedProducts.length === 0;
-  const displayCount = selectedCategory ? filteredProducts.length : (totalCount || filteredProducts.length);
+  const displayCount =
+    selectedCategory || selectedSubcategory ? filteredProducts.length : (totalCount || filteredProducts.length);
 
   return (
     <Layout>
@@ -68,6 +136,15 @@ const FloorSamples = () => {
           selectedCategory={selectedCategory}
           onCategoryChange={setSelectedCategory}
         />
+
+        {selectedCategory && (
+          <SubcategoryFilter
+            subcategories={availableSubcategories}
+            selectedSubcategory={selectedSubcategory}
+            onSubcategoryChange={setSelectedSubcategory}
+            isLoading={isSubcategoryLoading}
+          />
+        )}
 
         <ProductGrid products={filteredProducts} isLoading={isInitialLoading} />
 

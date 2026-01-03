@@ -70,13 +70,16 @@ export type Database = {
       products: {
         Row: {
           category: Database["public"]["Enums"]["product_category"]
+          can_be_sold_separately: boolean
           created_at: string
           description: string
           discount_percent: number
           id: string
           is_new: boolean
+          is_set: boolean
           main_image_url: string
           name: string
+          part_of_set: string | null
           price_final: number
           price_original: number
           product_type: string | null
@@ -86,13 +89,16 @@ export type Database = {
         }
         Insert: {
           category?: Database["public"]["Enums"]["product_category"]
+          can_be_sold_separately?: boolean
           created_at?: string
           description?: string
           discount_percent?: number
           id?: string
           is_new?: boolean
+          is_set?: boolean
           main_image_url?: string
           name: string
+          part_of_set?: string | null
           price_final?: number
           price_original?: number
           product_type?: string | null
@@ -102,13 +108,16 @@ export type Database = {
         }
         Update: {
           category?: Database["public"]["Enums"]["product_category"]
+          can_be_sold_separately?: boolean
           created_at?: string
           description?: string
           discount_percent?: number
           id?: string
           is_new?: boolean
+          is_set?: boolean
           main_image_url?: string
           name?: string
+          part_of_set?: string | null
           price_final?: number
           price_original?: number
           product_type?: string | null
@@ -152,6 +161,7 @@ export type Database = {
       }
       set_items: {
         Row: {
+          child_product_id: string | null
           created_at: string
           display_order: number
           id: string
@@ -161,6 +171,7 @@ export type Database = {
           product_id: string
         }
         Insert: {
+          child_product_id?: string | null
           created_at?: string
           display_order?: number
           id?: string
@@ -170,6 +181,7 @@ export type Database = {
           product_id: string
         }
         Update: {
+          child_product_id?: string | null
           created_at?: string
           display_order?: number
           id?: string

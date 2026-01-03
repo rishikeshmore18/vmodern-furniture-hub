@@ -10,6 +10,9 @@ interface DbProduct {
   category: 'floor_sample' | 'online_inventory';
   product_type: string | null;
   subcategory: string | null;
+  is_set: boolean;
+  part_of_set: string | null;
+  can_be_sold_separately: boolean;
   description: string;
   price_original: number;
   discount_percent: number;
@@ -35,6 +38,7 @@ interface DbSetItem {
   price: number;
   image_url: string | null;
   display_order: number;
+  child_product_id: string | null;
 }
 
 interface DbSetItemImage {
@@ -89,6 +93,7 @@ function dbToProduct(
         price: item.price,
         imageUrl: item.image_url || undefined,
         imageUrls: itemImages.length > 0 ? itemImages : undefined,
+        childProductId: item.child_product_id || undefined,
       };
     });
 
@@ -98,6 +103,9 @@ function dbToProduct(
     category: dbProduct.category,
     productType: dbProduct.product_type || undefined,
     subcategory: dbProduct.subcategory || undefined,
+    isSet: dbProduct.is_set,
+    partOfSet: dbProduct.part_of_set || undefined,
+    canBeSoldSeparately: dbProduct.can_be_sold_separately,
     description: dbProduct.description,
     priceOriginal: dbProduct.price_original,
     discountPercent: dbProduct.discount_percent,
@@ -126,7 +134,7 @@ export function useProducts() {
        const productsResult = await withRetry(async () => {
          const result = await supabase
            .from('products')
-           .select('id,name,category,product_type,subcategory,description,price_original,discount_percent,price_final,is_new,tags,main_image_url,created_at,updated_at')
+           .select('id,name,category,product_type,subcategory,is_set,part_of_set,can_be_sold_separately,description,price_original,discount_percent,price_final,is_new,tags,main_image_url,created_at,updated_at')
            .order('created_at', { ascending: false });
          if (result.error) throw result.error;
          return result;
@@ -153,7 +161,7 @@ export function useProducts() {
         withRetry(async () => {
           const result = await supabase
             .from('set_items')
-            .select('id,product_id,name,price,image_url,display_order')
+            .select('id,product_id,name,price,image_url,display_order,child_product_id')
             .in('product_id', productIds);
           if (result.error) throw result.error;
           return result;
@@ -251,6 +259,7 @@ export function useProducts() {
     product: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'priceFinal'>
   ) => {
     try {
+      const hasSetItems = !!(product.setItems && product.setItems.length > 0);
       const { data: newProduct, error: productError } = await supabase
         .from('products')
         .insert({
@@ -258,6 +267,9 @@ export function useProducts() {
           category: product.category,
           product_type: product.productType || null,
           subcategory: product.subcategory || null,
+          is_set: hasSetItems,
+          part_of_set: product.partOfSet || null,
+          can_be_sold_separately: product.canBeSoldSeparately ?? true,
           description: product.description,
           price_original: product.priceOriginal,
           discount_percent: product.discountPercent,
@@ -284,6 +296,61 @@ export function useProducts() {
         if (imagesError) throw imagesError;
       }
 
+      const childProductIdsByIndex = hasSetItems
+        ? new Array(product.setItems?.length || 0).fill(null)
+        : [];
+
+      if (hasSetItems && product.setItems) {
+        for (const [index, item] of product.setItems.entries()) {
+          const itemName = item.name?.trim() || `${product.name} Item ${index + 1}`;
+          const itemImageUrls =
+            item.imageUrls && item.imageUrls.length > 0
+              ? item.imageUrls
+              : item.imageUrl
+                ? [item.imageUrl]
+                : [];
+          const childMainImageUrl = itemImageUrls[0] || product.mainImageUrl;
+
+          const { data: childProduct, error: childProductError } = await supabase
+            .from('products')
+            .insert({
+              name: itemName,
+              category: product.category,
+              product_type: product.productType || null,
+              subcategory: itemName || null,
+              description: product.description,
+              price_original: item.price,
+              discount_percent: 0,
+              is_new: product.isNew,
+              tags: product.tags,
+              main_image_url: childMainImageUrl,
+              is_set: false,
+              part_of_set: newProduct.id,
+              can_be_sold_separately: true,
+            })
+            .select()
+            .single();
+
+          if (childProductError) throw childProductError;
+
+          childProductIdsByIndex[index] = childProduct.id;
+
+          if (itemImageUrls.length > 0) {
+            const childImageInserts = itemImageUrls.map((url, imgIndex) => ({
+              product_id: childProduct.id,
+              image_url: url,
+              display_order: imgIndex,
+            }));
+
+            const { error: childImagesError } = await supabase
+              .from('product_images')
+              .insert(childImageInserts);
+
+            if (childImagesError) throw childImagesError;
+          }
+        }
+      }
+
       if (product.setItems && product.setItems.length > 0) {
         const setItemInserts = product.setItems.map((item, index) => ({
           product_id: newProduct.id,
@@ -293,6 +360,7 @@ export function useProducts() {
             item.imageUrl ||
             (item.imageUrls && item.imageUrls.length > 0 ? item.imageUrls[0] : null),
           display_order: index,
+          child_product_id: childProductIdsByIndex[index] || null,
         }));
 
         const { data: insertedSetItems, error: setItemsError } = await supabase
@@ -341,6 +409,9 @@ export function useProducts() {
         category: product.category,
         productType: product.productType,
         subcategory: product.subcategory,
+        isSet: hasSetItems,
+        partOfSet: product.partOfSet,
+        canBeSoldSeparately: product.canBeSoldSeparately,
         description: product.description,
         priceOriginal: product.priceOriginal,
         discountPercent: product.discountPercent,
@@ -354,7 +425,11 @@ export function useProducts() {
         updatedAt: now,
       };
 
-      setProducts((prev) => [newFrontendProduct, ...prev]);
+      if (hasSetItems) {
+        await fetchProducts();
+      } else {
+        setProducts((prev) => [newFrontendProduct, ...prev]);
+      }
 
       toast({ title: 'Product added successfully' });
       return newProduct;
@@ -379,20 +454,31 @@ export function useProducts() {
     product: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'priceFinal'>
   ) => {
     try {
+      const hasSetItems = !!(product.setItems && product.setItems.length > 0);
+      const productUpdate: Record<string, unknown> = {
+        name: product.name,
+        category: product.category,
+        product_type: product.productType || null,
+        subcategory: product.subcategory || null,
+        description: product.description,
+        price_original: product.priceOriginal,
+        discount_percent: product.discountPercent,
+        is_new: product.isNew,
+        tags: product.tags,
+        main_image_url: product.mainImageUrl,
+        is_set: hasSetItems,
+      };
+
+      if (product.partOfSet !== undefined) {
+        productUpdate.part_of_set = product.partOfSet || null;
+      }
+      if (product.canBeSoldSeparately !== undefined) {
+        productUpdate.can_be_sold_separately = product.canBeSoldSeparately;
+      }
+
       const { error: productError } = await supabase
         .from('products')
-        .update({
-          name: product.name,
-          category: product.category,
-          product_type: product.productType || null,
-          subcategory: product.subcategory || null,
-          description: product.description,
-          price_original: product.priceOriginal,
-          discount_percent: product.discountPercent,
-          is_new: product.isNew,
-          tags: product.tags,
-          main_image_url: product.mainImageUrl,
-        })
+        .update(productUpdate)
         .eq('id', id);
 
       if (productError) throw productError;
@@ -415,7 +501,7 @@ export function useProducts() {
 
       const { data: existingSetItems } = await supabase
         .from('set_items')
-        .select('id')
+        .select('id,child_product_id')
         .eq('product_id', id);
 
       if (existingSetItems && existingSetItems.length > 0) {
@@ -428,7 +514,111 @@ export function useProducts() {
 
       await supabase.from('set_items').delete().eq('product_id', id);
 
+      const existingChildIds = (existingSetItems || [])
+        .map((item) => item.child_product_id)
+        .filter((value): value is string => !!value);
+
+      const usedChildIds = new Set<string>();
+      const childProductIdsByIndex =
+        product.setItems && product.setItems.length > 0
+          ? new Array(product.setItems.length).fill(null)
+          : [];
+
       if (product.setItems && product.setItems.length > 0) {
+        for (const [index, item] of product.setItems.entries()) {
+          const itemName = item.name?.trim() || `${product.name} Item ${index + 1}`;
+          const itemImageUrls =
+            item.imageUrls && item.imageUrls.length > 0
+              ? item.imageUrls
+              : item.imageUrl
+                ? [item.imageUrl]
+                : [];
+          const childMainImageUrl = itemImageUrls[0] || product.mainImageUrl;
+
+          if (item.childProductId) {
+            usedChildIds.add(item.childProductId);
+
+            const { error: childUpdateError } = await supabase
+              .from('products')
+              .update({
+                name: itemName,
+                category: product.category,
+                product_type: product.productType || null,
+                subcategory: itemName || null,
+                description: product.description,
+                price_original: item.price,
+                discount_percent: 0,
+                is_new: product.isNew,
+                tags: product.tags,
+                main_image_url: childMainImageUrl,
+                is_set: false,
+                part_of_set: id,
+                can_be_sold_separately: true,
+              })
+              .eq('id', item.childProductId);
+
+            if (childUpdateError) throw childUpdateError;
+
+            await supabase.from('product_images').delete().eq('product_id', item.childProductId);
+
+            if (itemImageUrls.length > 0) {
+              const childImageInserts = itemImageUrls.map((url, imgIndex) => ({
+                product_id: item.childProductId,
+                image_url: url,
+                display_order: imgIndex,
+              }));
+
+              const { error: childImagesError } = await supabase
+                .from('product_images')
+                .insert(childImageInserts);
+
+              if (childImagesError) throw childImagesError;
+            }
+
+            childProductIdsByIndex[index] = item.childProductId;
+            continue;
+          }
+
+          const { data: childProduct, error: childProductError } = await supabase
+            .from('products')
+            .insert({
+              name: itemName,
+              category: product.category,
+              product_type: product.productType || null,
+              subcategory: itemName || null,
+              description: product.description,
+              price_original: item.price,
+              discount_percent: 0,
+              is_new: product.isNew,
+              tags: product.tags,
+              main_image_url: childMainImageUrl,
+              is_set: false,
+              part_of_set: id,
+              can_be_sold_separately: true,
+            })
+            .select()
+            .single();
+
+          if (childProductError) throw childProductError;
+
+          usedChildIds.add(childProduct.id);
+          childProductIdsByIndex[index] = childProduct.id;
+
+          if (itemImageUrls.length > 0) {
+            const childImageInserts = itemImageUrls.map((url, imgIndex) => ({
+              product_id: childProduct.id,
+              image_url: url,
+              display_order: imgIndex,
+            }));
+
+            const { error: childImagesError } = await supabase
+              .from('product_images')
+              .insert(childImageInserts);
+
+            if (childImagesError) throw childImagesError;
+          }
+        }
+
         const setItemInserts = product.setItems.map((item, index) => ({
           product_id: id,
           name: item.name,
@@ -437,6 +627,7 @@ export function useProducts() {
             item.imageUrl ||
             (item.imageUrls && item.imageUrls.length > 0 ? item.imageUrls[0] : null),
           display_order: index,
+          child_product_id: childProductIdsByIndex[index] || null,
         }));
 
         const { data: insertedSetItems, error: setItemsError } = await supabase
@@ -478,6 +669,14 @@ export function useProducts() {
         }
       }
 
+      const removedChildIds = existingChildIds.filter((childId) => !usedChildIds.has(childId));
+      if (removedChildIds.length > 0) {
+        await supabase
+          .from('products')
+          .update({ part_of_set: null, is_set: false, can_be_sold_separately: true })
+          .in('id', removedChildIds);
+      }
+
       const now = new Date().toISOString();
       const updatedProduct: Product = {
         id,
@@ -485,6 +684,9 @@ export function useProducts() {
         category: product.category,
         productType: product.productType,
         subcategory: product.subcategory,
+        isSet: hasSetItems,
+        partOfSet: product.partOfSet,
+        canBeSoldSeparately: product.canBeSoldSeparately,
         description: product.description,
         priceOriginal: product.priceOriginal,
         discountPercent: product.discountPercent,
@@ -498,14 +700,18 @@ export function useProducts() {
         updatedAt: now,
       };
 
-      setProducts((prev) =>
-        prev.map((p) => {
-          if (p.id === id) {
-            return { ...updatedProduct, createdAt: p.createdAt };
-          }
-          return p;
-        })
-      );
+      if (hasSetItems) {
+        await fetchProducts();
+      } else {
+        setProducts((prev) =>
+          prev.map((p) => {
+            if (p.id === id) {
+              return { ...updatedProduct, createdAt: p.createdAt };
+            }
+            return p;
+          })
+        );
+      }
 
       toast({ title: 'Product updated successfully' });
     } catch (err: any) {
@@ -527,6 +733,31 @@ export function useProducts() {
   const deleteProduct = async (id: string) => {
     try {
       setProducts((prev) => prev.filter((p) => p.id !== id));
+
+      const { data: productInfo } = await supabase
+        .from('products')
+        .select('id,part_of_set,is_set')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (productInfo?.part_of_set) {
+        await supabase.from('set_items').delete().eq('child_product_id', id);
+      }
+
+      if (productInfo?.is_set) {
+        const { data: childProducts } = await supabase
+          .from('products')
+          .select('id')
+          .eq('part_of_set', id);
+
+        const childIds = (childProducts || []).map((child) => child.id);
+        if (childIds.length > 0) {
+          await supabase
+            .from('products')
+            .update({ part_of_set: null, is_set: false, can_be_sold_separately: true })
+            .in('id', childIds);
+        }
+      }
 
       const { error } = await supabase.from('products').delete().eq('id', id);
 
@@ -560,7 +791,7 @@ export function useProducts() {
          withRetry(async () => {
            const result = await supabase
              .from('products')
-             .select('id,name,category,product_type,subcategory,description,price_original,discount_percent,price_final,is_new,tags,main_image_url,created_at,updated_at')
+             .select('id,name,category,product_type,subcategory,is_set,part_of_set,can_be_sold_separately,description,price_original,discount_percent,price_final,is_new,tags,main_image_url,created_at,updated_at')
              .eq('id', id)
              .maybeSingle();
            if (result.error) throw result.error;
@@ -577,7 +808,7 @@ export function useProducts() {
          withRetry(async () => {
            const result = await supabase
              .from('set_items')
-             .select('id,product_id,name,price,image_url,display_order')
+             .select('id,product_id,name,price,image_url,display_order,child_product_id')
              .eq('product_id', id);
            if (result.error) throw result.error;
            return result;
@@ -651,7 +882,7 @@ async function fetchProductById(id: string): Promise<Product | null> {
     withRetry(async () => {
       const result = await supabase
         .from('products')
-        .select('id,name,category,product_type,subcategory,description,price_original,discount_percent,price_final,is_new,tags,main_image_url,created_at,updated_at')
+        .select('id,name,category,product_type,subcategory,is_set,part_of_set,can_be_sold_separately,description,price_original,discount_percent,price_final,is_new,tags,main_image_url,created_at,updated_at')
         .eq('id', id)
         .maybeSingle();
       if (result.error) throw result.error;
@@ -668,7 +899,7 @@ async function fetchProductById(id: string): Promise<Product | null> {
     withRetry(async () => {
       const result = await supabase
         .from('set_items')
-        .select('id,product_id,name,price,image_url,display_order')
+        .select('id,product_id,name,price,image_url,display_order,child_product_id')
         .eq('product_id', id);
       if (result.error) throw result.error;
       return result;
@@ -703,6 +934,22 @@ async function fetchProductById(id: string): Promise<Product | null> {
   );
 }
 
+async function fetchChildProductsForSet(setId: string): Promise<Product[]> {
+  const result = await withRetry(async () => {
+    const res = await supabase
+      .from('products')
+      .select('id,name,category,product_type,subcategory,is_set,part_of_set,can_be_sold_separately,description,price_original,discount_percent,price_final,is_new,tags,main_image_url,created_at,updated_at')
+      .eq('part_of_set', setId)
+      .order('created_at', { ascending: true });
+    if (res.error) throw res.error;
+    return res;
+  });
+
+  if (!result.data || result.data.length === 0) return [];
+
+  return result.data.map((dbProduct) => dbToProduct(dbProduct as DbProduct, [], [], []));
+}
+
 export function useProductById(id?: string) {
   const [product, setProduct] = useState<Product | null>(() => {
     return id ? getCachedProductById(id) : null;
@@ -711,27 +958,72 @@ export function useProductById(id?: string) {
     return id ? !getCachedProductById(id) : false;
   });
   const [error, setError] = useState<string | null>(null);
+  const [parentSet, setParentSet] = useState<Product | null>(null);
+  const [setChildren, setSetChildren] = useState<Product[]>([]);
 
   useEffect(() => {
     if (!id) {
       setProduct(null);
-      setIsLoading(false);
-      setError(null);
-      return;
-    }
-
-    const cached = getCachedProductById(id);
-    if (cached) {
-      setProduct(cached);
+      setParentSet(null);
+      setSetChildren([]);
       setIsLoading(false);
       setError(null);
       return;
     }
 
     let isActive = true;
+
+    const loadRelations = (result: Product | null) => {
+      if (!isActive) return;
+      setParentSet(null);
+      setSetChildren([]);
+
+      if (!result) return;
+
+      const relationTasks: Promise<void>[] = [];
+
+      if (result.isSet) {
+        relationTasks.push(
+          fetchChildProductsForSet(result.id).then((children) => {
+            if (!isActive) return;
+            setSetChildren(children);
+          })
+        );
+      }
+
+      if (result.partOfSet) {
+        relationTasks.push(
+          fetchProductById(result.partOfSet).then((parent) => {
+            if (!isActive) return;
+            setParentSet(parent);
+          })
+        );
+      }
+
+      if (relationTasks.length > 0) {
+        Promise.all(relationTasks).catch((err) => {
+          if (!isActive) return;
+          console.error('Error loading product relations:', err);
+        });
+      }
+    };
+
+    const cached = getCachedProductById(id);
+    if (cached) {
+      setProduct(cached);
+      loadRelations(cached);
+      setIsLoading(false);
+      setError(null);
+      return () => {
+        isActive = false;
+      };
+    }
+
     setIsLoading(true);
     setError(null);
     setProduct(null);
+    setParentSet(null);
+    setSetChildren([]);
 
     fetchProductById(id)
       .then((result) => {
@@ -740,12 +1032,15 @@ export function useProductById(id?: string) {
           setCachedProductById(result);
         }
         setProduct(result);
+        loadRelations(result);
       })
       .catch((err) => {
         if (!isActive) return;
         console.error('Error fetching product:', err);
         setError('Failed to load product');
         setProduct(null);
+        setParentSet(null);
+        setSetChildren([]);
       })
       .finally(() => {
         if (!isActive) return;
@@ -757,7 +1052,7 @@ export function useProductById(id?: string) {
     };
   }, [id]);
 
-  return { product, isLoading, error };
+  return { product, parentSet, setChildren, isLoading, error };
 }
 
 // Cache for public products
@@ -781,7 +1076,7 @@ export function useFeaturedProducts() {
         // Select only essential fields to reduce payload
         const { data: productsData, error: productsError } = await supabase
           .from('products')
-          .select('id,name,category,product_type,subcategory,description,price_original,discount_percent,price_final,is_new,tags,main_image_url,created_at,updated_at')
+          .select('id,name,category,product_type,subcategory,is_set,part_of_set,can_be_sold_separately,description,price_original,discount_percent,price_final,is_new,tags,main_image_url,created_at,updated_at')
           .or('tags.cs.{new},tags.cs.{sale},tags.cs.{staff_pick}')
           .order('created_at', { ascending: false })
           .limit(6);
@@ -821,6 +1116,9 @@ export function useFeaturedProducts() {
             category: dbProduct.category,
             productType: dbProduct.product_type || undefined,
             subcategory: dbProduct.subcategory || undefined,
+            isSet: dbProduct.is_set,
+            partOfSet: dbProduct.part_of_set || undefined,
+            canBeSoldSeparately: dbProduct.can_be_sold_separately,
             description: dbProduct.description,
             priceOriginal: dbProduct.price_original,
             discountPercent: dbProduct.discount_percent,
@@ -891,7 +1189,7 @@ export function usePublicProducts() {
          const productsResult = await withRetry(async () => {
            const result = await supabase
              .from('products')
-             .select('id,name,category,product_type,subcategory,description,price_original,discount_percent,price_final,is_new,tags,main_image_url,created_at,updated_at')
+             .select('id,name,category,product_type,subcategory,is_set,part_of_set,can_be_sold_separately,description,price_original,discount_percent,price_final,is_new,tags,main_image_url,created_at,updated_at')
              .order('created_at', { ascending: false });
            if (result.error) throw result.error;
            return result;
@@ -920,7 +1218,7 @@ export function usePublicProducts() {
           withRetry(async () => {
             const result = await supabase
               .from('set_items')
-              .select('id,product_id,name,price,image_url,display_order')
+              .select('id,product_id,name,price,image_url,display_order,child_product_id')
               .in('product_id', productIds);
             if (result.error) throw result.error;
             return result;
@@ -1200,8 +1498,9 @@ async function fetchFloorSamplesPage(page: number, pageSize: number) {
 
   const { data: productsData, error: productsError } = await supabase
     .from('products')
-    .select('id,name,category,product_type,subcategory,description,price_original,discount_percent,price_final,is_new,tags,main_image_url,created_at,updated_at')
+    .select('id,name,category,product_type,subcategory,is_set,part_of_set,can_be_sold_separately,description,price_original,discount_percent,price_final,is_new,tags,main_image_url,created_at,updated_at')
     .eq('category', 'floor_sample')
+    .order('is_set', { ascending: false })
     .order('created_at', { ascending: false })
     .range(from, to);
 
@@ -1221,6 +1520,9 @@ async function fetchFloorSamplesPage(page: number, pageSize: number) {
       category: dbProduct.category,
       productType: dbProduct.product_type || undefined,
       subcategory: dbProduct.subcategory || undefined,
+      isSet: dbProduct.is_set,
+      partOfSet: dbProduct.part_of_set || undefined,
+      canBeSoldSeparately: dbProduct.can_be_sold_separately,
       description: dbProduct.description,
       priceOriginal: dbProduct.price_original,
       discountPercent: dbProduct.discount_percent,
@@ -1246,6 +1548,28 @@ export async function prefetchFloorSamplesPage(page: number = 1, pageSize: numbe
   } catch {
     // Prefetch is best-effort
   }
+}
+
+export async function fetchFloorSampleSubcategories(productType: string): Promise<string[]> {
+  const normalized = productType.trim();
+  if (!normalized) return [];
+
+  const result = await withRetry(async () => {
+    const res = await supabase
+      .from('products')
+      .select('subcategory')
+      .eq('category', 'floor_sample')
+      .eq('product_type', normalized)
+      .not('subcategory', 'is', null);
+    if (res.error) throw res.error;
+    return res;
+  });
+
+  const unique = Array.from(
+    new Set((result.data || []).map((row) => row.subcategory).filter(Boolean))
+  ) as string[];
+
+  return unique.sort((a, b) => a.localeCompare(b));
 }
 
 // Hook for paginated floor samples (server-side filtering)

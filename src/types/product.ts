@@ -12,6 +12,7 @@ export interface SetItem {
   price: number;
   imageUrl?: string; // Deprecated: kept for backward compatibility
   imageUrls?: string[]; // Multiple images support
+  childProductId?: string;
 }
 
 export interface Product {
@@ -20,6 +21,9 @@ export interface Product {
   category: ProductCategory;
   productType?: ProductType;
   subcategory?: string;
+  isSet?: boolean;
+  partOfSet?: string;
+  canBeSoldSeparately?: boolean;
   description: string;
   priceOriginal: number;
   discountPercent: number;
