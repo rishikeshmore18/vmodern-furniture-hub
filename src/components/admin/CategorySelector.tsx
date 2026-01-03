@@ -30,13 +30,15 @@ export function CategorySelector({
   onCategoryChange,
   onSubcategoryChange,
 }: CategorySelectorProps) {
-  const [categories, setCategories] = useState<CategoryConfig[]>([]);
+  // Initialize categories immediately to avoid timing issues
+  const [categories, setCategories] = useState<CategoryConfig[]>(() => getStoredCategories());
   const [showCustomCategory, setShowCustomCategory] = useState(false);
   const [showCustomSubcategory, setShowCustomSubcategory] = useState(false);
   const [customCategoryInput, setCustomCategoryInput] = useState('');
   const [customSubcategoryInput, setCustomSubcategoryInput] = useState('');
 
   useEffect(() => {
+    // Refresh categories in case they were updated elsewhere
     setCategories(getStoredCategories());
   }, []);
 
@@ -46,13 +48,19 @@ export function CategorySelector({
       .replace(/\b\w/g, (char) => char.toUpperCase());
   const normalizeKey = (value: string) => value.trim().toLowerCase().replace(/\s+/g, '_');
 
+  // Find exact match first, then try normalized match
   const currentCategory = categories.find((c) => c.name === category);
-  const subcategories = currentCategory?.subcategories || [];
   const categoryBySlug = categories.find((c) => normalizeKey(c.name) === normalizeKey(category));
+  const subcategories = (currentCategory || categoryBySlug)?.subcategories || [];
+  
+  // Format display text for the selected category
   const displayCategory = category
-    ? categoryBySlug?.name || formatLabel(category)
+    ? (currentCategory?.name || categoryBySlug?.name || formatLabel(category))
     : '';
-  const needsHiddenCategoryItem = category.length > 0 && !currentCategory;
+  
+  // Need hidden item if category exists but doesn't match any visible item exactly
+  // This ensures Radix UI can always find a matching SelectItem to display
+  const needsHiddenCategoryItem = category.length > 0 && !currentCategory && !categoryBySlug;
 
   const handleAddCustomCategory = () => {
     if (customCategoryInput.trim()) {
@@ -94,8 +102,10 @@ export function CategorySelector({
     }
   };
 
+  // Find exact match for subcategory
   const subcategoryMatch = subcategories.find((sub) => sub === subcategory);
   const displaySubcategory = subcategory ? formatLabel(subcategory) : '';
+  // Need hidden item if subcategory exists but doesn't match any visible item
   const needsHiddenSubcategoryItem = subcategory.length > 0 && !subcategoryMatch;
 
   return (
@@ -128,6 +138,7 @@ export function CategorySelector({
               <SelectValue placeholder="Select category" />
             </SelectTrigger>
             <SelectContent>
+              {/* Always ensure a matching SelectItem exists for the current value */}
               {needsHiddenCategoryItem && (
                 <SelectItem value={category} className="hidden">
                   {displayCategory}
