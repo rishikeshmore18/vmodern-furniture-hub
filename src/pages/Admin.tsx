@@ -568,26 +568,28 @@ const Admin = () => {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div>
                             <Label htmlFor="price">Set Price / Total ($)</Label>
-                            <Input
-                              id="price"
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={formData.priceOriginal}
-                              onChange={(e) => setFormData({ ...formData, priceOriginal: parseFloat(e.target.value) || 0 })}
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="discount">Discount (%)</Label>
-                            <Input
-                              id="discount"
-                              type="number"
-                              min="0"
-                              max="100"
-                              value={formData.discountPercent}
-                              onChange={(e) => setFormData({ ...formData, discountPercent: parseFloat(e.target.value) || 0 })}
-                            />
-                          </div>
+                          <Input
+                            id="price"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={formData.priceOriginal}
+                            onFocus={(e) => e.currentTarget.select()}
+                            onChange={(e) => setFormData({ ...formData, priceOriginal: parseFloat(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="discount">Discount (%)</Label>
+                          <Input
+                            id="discount"
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={formData.discountPercent}
+                            onFocus={(e) => e.currentTarget.select()}
+                            onChange={(e) => setFormData({ ...formData, discountPercent: parseFloat(e.target.value) || 0 })}
+                          />
+                        </div>
                         </div>
                         
                         {/* Price Preview */}

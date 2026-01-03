@@ -40,8 +40,19 @@ export function CategorySelector({
     setCategories(getStoredCategories());
   }, []);
 
+  const formatLabel = (value: string) =>
+    value
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  const normalizeKey = (value: string) => value.trim().toLowerCase().replace(/\s+/g, '_');
+
   const currentCategory = categories.find((c) => c.name === category);
   const subcategories = currentCategory?.subcategories || [];
+  const categoryBySlug = categories.find((c) => normalizeKey(c.name) === normalizeKey(category));
+  const displayCategory = category
+    ? categoryBySlug?.name || formatLabel(category)
+    : '';
+  const needsHiddenCategoryItem = category.length > 0 && !currentCategory;
 
   const handleAddCustomCategory = () => {
     if (customCategoryInput.trim()) {
@@ -83,6 +94,10 @@ export function CategorySelector({
     }
   };
 
+  const subcategoryMatch = subcategories.find((sub) => sub === subcategory);
+  const displaySubcategory = subcategory ? formatLabel(subcategory) : '';
+  const needsHiddenSubcategoryItem = subcategory.length > 0 && !subcategoryMatch;
+
   return (
     <div className="space-y-4">
       {/* Category */}
@@ -113,6 +128,11 @@ export function CategorySelector({
               <SelectValue placeholder="Select category" />
             </SelectTrigger>
             <SelectContent>
+              {needsHiddenCategoryItem && (
+                <SelectItem value={category} className="hidden">
+                  {displayCategory}
+                </SelectItem>
+              )}
               {categories.map((cat) => (
                 <SelectItem key={cat.name} value={cat.name}>
                   {cat.name}
@@ -152,18 +172,23 @@ export function CategorySelector({
                 Cancel
               </Button>
             </div>
-          ) : (
-            <Select value={subcategory || ''} onValueChange={handleSubcategorySelect}>
-              <SelectTrigger className="mt-1">
-                <SelectValue placeholder="Select subcategory" />
-              </SelectTrigger>
-              <SelectContent>
-                {subcategories.map((sub) => (
-                  <SelectItem key={sub} value={sub}>
-                    {sub}
-                  </SelectItem>
-                ))}
-                <SelectItem value="__custom__">
+        ) : (
+          <Select value={subcategory || ''} onValueChange={handleSubcategorySelect}>
+            <SelectTrigger className="mt-1">
+              <SelectValue placeholder="Select subcategory" />
+            </SelectTrigger>
+            <SelectContent>
+              {needsHiddenSubcategoryItem && (
+                <SelectItem value={subcategory} className="hidden">
+                  {displaySubcategory}
+                </SelectItem>
+              )}
+              {subcategories.map((sub) => (
+                <SelectItem key={sub} value={sub}>
+                  {sub}
+                </SelectItem>
+              ))}
+              <SelectItem value="__custom__">
                   <span className="flex items-center gap-2 text-primary">
                     <Plus className="h-4 w-4" />
                     Add Custom...

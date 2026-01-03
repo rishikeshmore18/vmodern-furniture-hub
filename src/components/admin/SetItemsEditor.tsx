@@ -96,6 +96,7 @@ export function SetItemsEditor({ items, onChange }: SetItemsEditorProps) {
                     min="0"
                     step="0.01"
                     value={item.price}
+                    onFocus={(e) => e.currentTarget.select()}
                     onChange={(e) => updateItem(item.id, 'price', parseFloat(e.target.value) || 0)}
                   />
                 </div>
