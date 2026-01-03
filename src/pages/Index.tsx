@@ -1,14 +1,49 @@
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, MapPin, Phone, Clock, Loader2 } from 'lucide-react';
+import { ArrowRight, MapPin, Phone, Clock } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { ProductGrid } from '@/components/products/ProductGrid';
 import { Button } from '@/components/ui/button';
 import { storeInfo } from '@/data/storeInfo';
-import { useFeaturedProducts } from '@/hooks/useProducts';
+import { prefetchFloorSamplesPage, useFeaturedProducts } from '@/hooks/useProducts';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const Index = () => {
   const { featuredProducts, newArrivals, onSale, staffPicks, isLoading } = useFeaturedProducts();
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const connection = (navigator as Navigator & {
+      connection?: { saveData?: boolean; effectiveType?: string };
+    }).connection;
+    const isSlowConnection = connection?.effectiveType
+      ? ['slow-2g', '2g'].includes(connection.effectiveType)
+      : false;
+    if (connection?.saveData || isSlowConnection) return;
+
+    const prefetch = () => {
+      prefetchFloorSamplesPage(1, 12);
+    };
+
+    const win = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+
+    if (win.requestIdleCallback) {
+      const id = win.requestIdleCallback(prefetch, { timeout: 2000 });
+      return () => {
+        if (win.cancelIdleCallback) {
+          win.cancelIdleCallback(id);
+        }
+      };
+    }
+
+    const timeoutId = window.setTimeout(prefetch, 800);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, []);
 
   return (
     <Layout>

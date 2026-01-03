@@ -629,12 +629,143 @@ export function useProducts() {
   };
 }
 
+const PRODUCT_CACHE_DURATION = 10 * 60 * 1000; // 10 minute cache
+const productByIdCache = new Map<string, { product: Product; timestamp: number }>();
+
+function getCachedProductById(id: string) {
+  const cached = productByIdCache.get(id);
+  if (!cached) return null;
+  if (Date.now() - cached.timestamp > PRODUCT_CACHE_DURATION) {
+    productByIdCache.delete(id);
+    return null;
+  }
+  return cached.product;
+}
+
+function setCachedProductById(product: Product) {
+  productByIdCache.set(product.id, { product, timestamp: Date.now() });
+}
+
+async function fetchProductById(id: string): Promise<Product | null> {
+  const [productResult, imagesResult, setItemsResult] = await Promise.all([
+    withRetry(async () => {
+      const result = await supabase
+        .from('products')
+        .select('id,name,category,product_type,subcategory,description,price_original,discount_percent,price_final,is_new,tags,main_image_url,created_at,updated_at')
+        .eq('id', id)
+        .maybeSingle();
+      if (result.error) throw result.error;
+      return result;
+    }),
+    withRetry(async () => {
+      const result = await supabase
+        .from('product_images')
+        .select('id,product_id,image_url,display_order')
+        .eq('product_id', id);
+      if (result.error) throw result.error;
+      return result;
+    }),
+    withRetry(async () => {
+      const result = await supabase
+        .from('set_items')
+        .select('id,product_id,name,price,image_url,display_order')
+        .eq('product_id', id);
+      if (result.error) throw result.error;
+      return result;
+    }),
+  ]);
+
+  if (!productResult.data) return null;
+
+  const setItemIds = (setItemsResult.data || []).map((item) => item.id);
+  let setItemImagesData: DbSetItemImage[] = [];
+  if (setItemIds.length > 0) {
+    try {
+      const result = await withRetry(async () => {
+        const res = await supabase
+          .from('set_item_images')
+          .select('id,set_item_id,image_url,display_order')
+          .in('set_item_id', setItemIds);
+        if (res.error) throw res.error;
+        return res;
+      });
+      setItemImagesData = (result.data || []) as DbSetItemImage[];
+    } catch {
+      // Continue without set item images
+    }
+  }
+
+  return dbToProduct(
+    productResult.data as DbProduct,
+    (imagesResult.data || []) as DbProductImage[],
+    (setItemsResult.data || []) as DbSetItem[],
+    setItemImagesData
+  );
+}
+
+export function useProductById(id?: string) {
+  const [product, setProduct] = useState<Product | null>(() => {
+    return id ? getCachedProductById(id) : null;
+  });
+  const [isLoading, setIsLoading] = useState(() => {
+    return id ? !getCachedProductById(id) : false;
+  });
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!id) {
+      setProduct(null);
+      setIsLoading(false);
+      setError(null);
+      return;
+    }
+
+    const cached = getCachedProductById(id);
+    if (cached) {
+      setProduct(cached);
+      setIsLoading(false);
+      setError(null);
+      return;
+    }
+
+    let isActive = true;
+    setIsLoading(true);
+    setError(null);
+    setProduct(null);
+
+    fetchProductById(id)
+      .then((result) => {
+        if (!isActive) return;
+        if (result) {
+          setCachedProductById(result);
+        }
+        setProduct(result);
+      })
+      .catch((err) => {
+        if (!isActive) return;
+        console.error('Error fetching product:', err);
+        setError('Failed to load product');
+        setProduct(null);
+      })
+      .finally(() => {
+        if (!isActive) return;
+        setIsLoading(false);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [id]);
+
+  return { product, isLoading, error };
+}
+
 // Cache for public products
 let publicProductsCache: {
   products: Product[];
   timestamp: number;
 } | null = null;
-const CACHE_DURATION = 60000; // 1 minute cache
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minute cache
 
 // Lightweight hook for homepage - only fetches featured items (6 max)
 export function useFeaturedProducts() {
@@ -908,94 +1039,161 @@ export function usePublicProducts() {
   };
 }
 
+const FLOOR_SAMPLES_CACHE_DURATION = 5 * 60 * 1000; // 5 minute cache
+const floorSamplesPageCache = new Map<
+  string,
+  { products: Product[]; totalCount: number; timestamp: number }
+>();
+
+function getFloorSamplesCacheKey(page: number, pageSize: number) {
+  return `${page}:${pageSize}`;
+}
+
+function getCachedFloorSamplesPage(page: number, pageSize: number) {
+  const key = getFloorSamplesCacheKey(page, pageSize);
+  const cached = floorSamplesPageCache.get(key);
+  if (!cached) return null;
+  if (Date.now() - cached.timestamp > FLOOR_SAMPLES_CACHE_DURATION) {
+    floorSamplesPageCache.delete(key);
+    return null;
+  }
+  return cached;
+}
+
+function setCachedFloorSamplesPage(
+  page: number,
+  pageSize: number,
+  products: Product[],
+  totalCount: number
+) {
+  const key = getFloorSamplesCacheKey(page, pageSize);
+  floorSamplesPageCache.set(key, {
+    products,
+    totalCount,
+    timestamp: Date.now(),
+  });
+}
+
+async function fetchFloorSamplesPage(page: number, pageSize: number) {
+  // Get total count first
+  const { count } = await supabase
+    .from('products')
+    .select('*', { count: 'exact', head: true })
+    .eq('category', 'floor_sample');
+
+  const totalCount = count || 0;
+
+  // Fetch paginated products - select only needed fields
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  const { data: productsData, error: productsError } = await supabase
+    .from('products')
+    .select('id,name,category,product_type,subcategory,description,price_original,discount_percent,price_final,is_new,tags,main_image_url,created_at,updated_at')
+    .eq('category', 'floor_sample')
+    .order('created_at', { ascending: false })
+    .range(from, to);
+
+  if (productsError) throw productsError;
+
+  if (!productsData || productsData.length === 0) {
+    return { products: [] as Product[], totalCount };
+  }
+
+  const productIds = productsData.map((p) => p.id);
+
+  // Fetch only main images for list view
+  const { data: imagesData } = await supabase
+    .from('product_images')
+    .select('product_id,image_url,display_order')
+    .in('product_id', productIds)
+    .eq('display_order', 0);
+
+  // Build images map
+  const imagesByProductId = new Map<string, string>();
+  (imagesData || []).forEach((img) => {
+    if (!imagesByProductId.has(img.product_id)) {
+      imagesByProductId.set(img.product_id, img.image_url);
+    }
+  });
+
+  // Convert to frontend products (simplified for list view)
+  const frontendProducts = productsData.map((dbProduct) => {
+    const mainImage = imagesByProductId.get(dbProduct.id) || dbProduct.main_image_url;
+
+    return {
+      id: dbProduct.id,
+      name: dbProduct.name,
+      category: dbProduct.category,
+      productType: dbProduct.product_type || undefined,
+      subcategory: dbProduct.subcategory || undefined,
+      description: dbProduct.description,
+      priceOriginal: dbProduct.price_original,
+      discountPercent: dbProduct.discount_percent,
+      priceFinal: dbProduct.price_final,
+      isNew: dbProduct.is_new,
+      tags: dbProduct.tags || [],
+      mainImageUrl: mainImage,
+      imageUrls: mainImage ? [mainImage] : undefined,
+      createdAt: dbProduct.created_at,
+      updatedAt: dbProduct.updated_at,
+    } as Product;
+  });
+
+  setCachedFloorSamplesPage(page, pageSize, frontendProducts, totalCount);
+
+  return { products: frontendProducts, totalCount };
+}
+
+export async function prefetchFloorSamplesPage(page: number = 1, pageSize: number = 12) {
+  if (getCachedFloorSamplesPage(page, pageSize)) return;
+  try {
+    await fetchFloorSamplesPage(page, pageSize);
+  } catch {
+    // Prefetch is best-effort
+  }
+}
+
 // Hook for paginated floor samples (server-side filtering)
 export function usePaginatedFloorSamples(page: number = 1, pageSize: number = 12) {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [totalCount, setTotalCount] = useState(0);
+  const cached = getCachedFloorSamplesPage(page, pageSize);
+  const [products, setProducts] = useState<Product[]>(() => cached?.products || []);
+  const [isLoading, setIsLoading] = useState(() => !cached);
+  const [totalCount, setTotalCount] = useState(() => cached?.totalCount || 0);
 
   useEffect(() => {
-    const fetchProducts = async () => {
+    let isActive = true;
+
+    const loadProducts = async () => {
       try {
-        setIsLoading(true);
-        
-        // Get total count first
-        const { count } = await supabase
-          .from('products')
-          .select('*', { count: 'exact', head: true })
-          .eq('category', 'floor_sample');
-        
-        setTotalCount(count || 0);
-
-        // Fetch paginated products - select only needed fields
-        const from = (page - 1) * pageSize;
-        const to = from + pageSize - 1;
-
-        const { data: productsData, error: productsError } = await supabase
-          .from('products')
-          .select('id,name,category,product_type,subcategory,description,price_original,discount_percent,price_final,is_new,tags,main_image_url,created_at,updated_at')
-          .eq('category', 'floor_sample')
-          .order('created_at', { ascending: false })
-          .range(from, to);
-
-        if (productsError) throw productsError;
-
-        if (!productsData || productsData.length === 0) {
-          setProducts([]);
+        const cachedPage = getCachedFloorSamplesPage(page, pageSize);
+        if (cachedPage) {
+          setProducts(cachedPage.products);
+          setTotalCount(cachedPage.totalCount);
           setIsLoading(false);
           return;
         }
 
-        const productIds = productsData.map((p) => p.id);
-
-        // Fetch only main images for list view
-        const { data: imagesData } = await supabase
-          .from('product_images')
-          .select('product_id,image_url,display_order')
-          .in('product_id', productIds)
-          .eq('display_order', 0);
-
-        // Build images map
-        const imagesByProductId = new Map<string, string>();
-        (imagesData || []).forEach((img) => {
-          if (!imagesByProductId.has(img.product_id)) {
-            imagesByProductId.set(img.product_id, img.image_url);
-          }
-        });
-
-        // Convert to frontend products (simplified for list view)
-        const frontendProducts = productsData.map((dbProduct) => {
-          const mainImage = imagesByProductId.get(dbProduct.id) || dbProduct.main_image_url;
-          
-          return {
-            id: dbProduct.id,
-            name: dbProduct.name,
-            category: dbProduct.category,
-            productType: dbProduct.product_type || undefined,
-            subcategory: dbProduct.subcategory || undefined,
-            description: dbProduct.description,
-            priceOriginal: dbProduct.price_original,
-            discountPercent: dbProduct.discount_percent,
-            priceFinal: dbProduct.price_final,
-            isNew: dbProduct.is_new,
-            tags: dbProduct.tags || [],
-            mainImageUrl: mainImage,
-            imageUrls: mainImage ? [mainImage] : undefined,
-            createdAt: dbProduct.created_at,
-            updatedAt: dbProduct.updated_at,
-          } as Product;
-        });
-
-        setProducts(frontendProducts);
+        setIsLoading(true);
+        const result = await fetchFloorSamplesPage(page, pageSize);
+        if (!isActive) return;
+        setProducts(result.products);
+        setTotalCount(result.totalCount);
       } catch (err) {
+        if (!isActive) return;
         console.error('Error fetching paginated floor samples:', err);
         setProducts([]);
       } finally {
+        if (!isActive) return;
         setIsLoading(false);
       }
     };
 
-    fetchProducts();
+    loadProducts();
+
+    return () => {
+      isActive = false;
+    };
   }, [page, pageSize]);
 
   const totalPages = Math.ceil(totalCount / pageSize);
