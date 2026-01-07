@@ -69,8 +69,8 @@ export type Database = {
       }
       products: {
         Row: {
-          category: Database["public"]["Enums"]["product_category"]
           can_be_sold_separately: boolean
+          category: Database["public"]["Enums"]["product_category"]
           created_at: string
           description: string
           discount_percent: number
@@ -88,8 +88,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          category?: Database["public"]["Enums"]["product_category"]
           can_be_sold_separately?: boolean
+          category?: Database["public"]["Enums"]["product_category"]
           created_at?: string
           description?: string
           discount_percent?: number
@@ -107,8 +107,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          category?: Database["public"]["Enums"]["product_category"]
           can_be_sold_separately?: boolean
+          category?: Database["public"]["Enums"]["product_category"]
           created_at?: string
           description?: string
           discount_percent?: number
@@ -125,7 +125,15 @@ export type Database = {
           tags?: Database["public"]["Enums"]["product_tag"][]
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "products_part_of_set_fkey"
+            columns: ["part_of_set"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       set_item_images: {
         Row: {
@@ -191,6 +199,13 @@ export type Database = {
           product_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "set_items_child_product_id_fkey"
+            columns: ["child_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "set_items_product_id_fkey"
             columns: ["product_id"]
