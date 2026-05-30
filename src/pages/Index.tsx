@@ -79,6 +79,7 @@ const Index = () => {
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
+              <BookAppointmentButton size="lg" variant="secondary" />
             </div>
           </div>
 
