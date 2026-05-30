@@ -58,6 +58,38 @@ npm run build
 
 The built files will be in the `dist` directory.
 
+## Booking Email Notifications
+
+The booking form calls the `book-appointment` Supabase Edge Function. That function saves the appointment first, then attempts to email the store at `Furniture1141@yahoo.com`.
+
+Configure one of these email options in Supabase project secrets:
+
+### Preferred: API email provider with your Zoho-domain sender
+
+Use this when your Zoho domain email is verified with an email API provider such as Resend.
+
+```bash
+RESEND_API_KEY=your_api_key
+BOOKING_EMAIL_FROM="Vmodern Furniture <appointments@yourdomain.com>"
+BOOKING_NOTIFY_EMAIL=Furniture1141@yahoo.com
+```
+
+### Fallback: Zoho SMTP
+
+Use this if SMTP is available from the deployed Edge Function environment.
+
+```bash
+ZOHO_SMTP_USER=appointments@yourdomain.com
+ZOHO_SMTP_PASSWORD=your_zoho_app_password
+ZOHO_SMTP_HOST=smtp.zoho.com
+ZOHO_SMTP_PORT=465
+ZOHO_SMTP_TLS=true
+BOOKING_EMAIL_FROM="Vmodern Furniture <appointments@yourdomain.com>"
+BOOKING_NOTIFY_EMAIL=Furniture1141@yahoo.com
+```
+
+If email delivery fails, the appointment remains saved and the customer still sees the normal success message.
+
 ## Troubleshooting
 
 - **404 errors on GitHub Pages**: Make sure GitHub Pages is set to use "GitHub Actions" as the source, not a branch

@@ -44,6 +44,27 @@ const schema = z.object({
   notes: z.string().trim().max(500).optional(),
 });
 
+const getBookingErrorMessage = (err: unknown) => {
+  if (err instanceof Error) return err.message;
+  if (typeof err !== 'object' || err === null) return 'Failed to book appointment';
+
+  const context = 'context' in err ? err.context : undefined;
+  if (typeof context === 'object' && context !== null && 'responseJson' in context) {
+    const responseJson = context.responseJson;
+    if (
+      typeof responseJson === 'object' &&
+      responseJson !== null &&
+      'error' in responseJson &&
+      typeof responseJson.error === 'string'
+    ) {
+      return responseJson.error;
+    }
+  }
+
+  if ('message' in err && typeof err.message === 'string') return err.message;
+  return 'Failed to book appointment';
+};
+
 export function AppointmentBookingDialog({ open, onOpenChange }: Props) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -117,9 +138,8 @@ export function AppointmentBookingDialog({ open, onOpenChange }: Props) {
       toast.success('Appointment booked! We will be in touch shortly.');
       reset();
       onOpenChange(false);
-    } catch (err: any) {
-      const msg = err?.context?.responseJson?.error || err?.message || 'Failed to book appointment';
-      toast.error(typeof msg === 'string' ? msg : 'Failed to book appointment');
+    } catch (err: unknown) {
+      toast.error(getBookingErrorMessage(err));
     } finally {
       setSubmitting(false);
     }
