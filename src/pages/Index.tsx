@@ -6,6 +6,7 @@ import { ProductGrid } from '@/components/products/ProductGrid';
 import { Button } from '@/components/ui/button';
 import { storeInfo } from '@/data/storeInfo';
 import { prefetchFloorSamplesPage, useFeaturedProducts } from '@/hooks/useProducts';
+import { BookAppointmentButton } from '@/components/appointment/BookAppointmentButton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const Index = () => {
