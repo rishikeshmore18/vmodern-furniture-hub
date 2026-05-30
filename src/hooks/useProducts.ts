@@ -478,7 +478,7 @@ export function useProducts() {
 
       const { error: productError } = await supabase
         .from('products')
-        .update(productUpdate)
+        .update(productUpdate as never)
         .eq('id', id);
 
       if (productError) throw productError;
