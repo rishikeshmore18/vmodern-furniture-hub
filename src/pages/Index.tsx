@@ -6,6 +6,7 @@ import { ProductGrid } from '@/components/products/ProductGrid';
 import { Button } from '@/components/ui/button';
 import { storeInfo } from '@/data/storeInfo';
 import { prefetchFloorSamplesPage, useFeaturedProducts } from '@/hooks/useProducts';
+import { BookAppointmentButton } from '@/components/appointment/BookAppointmentButton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const Index = () => {
@@ -78,6 +79,7 @@ const Index = () => {
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
+              <BookAppointmentButton size="lg" variant="secondary" />
             </div>
           </div>
 
