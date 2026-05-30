@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
     const h12 = hh % 12 === 0 ? 12 : hh % 12;
     const prettyTime = `${h12}:${mm.toString().padStart(2, '0')} ${period}`;
 
-    // Send notification email via Lovable Emails (transactional)
+    // Send notification email to store owner only (no customer confirmation).
     // Fails gracefully if email infra/template not yet configured.
     try {
       await supabase.functions.invoke('send-transactional-email', {
@@ -131,22 +131,6 @@ Deno.serve(async (req) => {
             appointmentDate: prettyDate,
             appointmentTime: prettyTime,
             notes: notes || '',
-            storeName: STORE_NAME,
-            storeAddress: STORE_ADDRESS,
-            storePhone: STORE_PHONE,
-          },
-        },
-      });
-      // Customer confirmation
-      await supabase.functions.invoke('send-transactional-email', {
-        body: {
-          templateName: 'appointment-confirmation',
-          recipientEmail: email,
-          idempotencyKey: `appt-confirm-${inserted.id}`,
-          templateData: {
-            customerName: name,
-            appointmentDate: prettyDate,
-            appointmentTime: prettyTime,
             storeName: STORE_NAME,
             storeAddress: STORE_ADDRESS,
             storePhone: STORE_PHONE,
